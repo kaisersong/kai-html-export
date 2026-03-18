@@ -1,8 +1,8 @@
 ---
 name: kai-html-export
 description: Export any HTML file to PPTX or PNG. Use when the user wants to convert an HTML presentation to PowerPoint, screenshot a web page, or export an HTML report as an image. Triggers: /kai-html-export, --pptx, --png, "export to pptx", "screenshot html", "convert html to powerpoint".
-version: 1.0.2
-metadata: {"openclaw":{"emoji":"📤","os":["darwin","linux","windows"],"requires":{"bins":["python3"]},"install":[{"id":"python-pptx","kind":"uv","package":"python-pptx","label":"python-pptx (PPTX assembly)"},{"id":"playwright","kind":"uv","package":"playwright","label":"Playwright (headless browser for screenshots)"}]}}
+version: 1.1.0
+metadata: {"openclaw":{"emoji":"📤","os":["darwin","linux","windows"],"requires":{"bins":["python3"]},"install":[{"id":"python-pptx","kind":"uv","package":"python-pptx","label":"python-pptx (PPTX assembly)"},{"id":"playwright","kind":"uv","package":"playwright","label":"Playwright (headless browser for screenshots)"},{"id":"beautifulsoup4","kind":"uv","package":"beautifulsoup4","label":"BeautifulSoup4 (HTML parsing for native export)"},{"id":"lxml","kind":"uv","package":"lxml","label":"lxml (HTML parser backend)"}]}}
 ---
 
 # kai-html-export
@@ -25,13 +25,35 @@ If no file is specified, use the most recently modified `.html` file in the curr
 Run the bundled script:
 
 ```bash
-python3 <skill-path>/scripts/export-pptx.py <file.html> [output.pptx] [--width 1440] [--height 900]
+python3 <skill-path>/scripts/export-pptx.py <file.html> [output.pptx] [--mode image|native] [--width 1440] [--height 900]
 ```
 
-- Detects `.slide` elements and captures each one as a full-bleed slide
-- Uses system Chrome/Edge/Brave first (no download); falls back to Playwright Chromium
-- Animations are disabled before capture so all content is visible
-- Reports slide count and output path when done
+### Export Modes
+
+**`--mode image`** (default):
+- Pixel-perfect screenshots of each slide
+- Visual fidelity: ⭐⭐⭐⭐⭐
+- Editability: ❌ None (text is rasterized)
+- Best for: archiving, sharing final presentations
+
+**`--mode native`** (new):
+- Editable text, shapes, and tables
+- Visual fidelity: ⭐⭐⭐ (simplified gradients, no shadows)
+- Editability: ✅ Full text editing
+- Best for: collaborative editing, content reuse
+
+Supported in native mode:
+- Text (h1-h6, p): font size, color, bold, alignment
+- Lists (ul, ol): bullet points
+- Tables: editable cells
+- Shapes (div with solid background): rectangles
+- Images: native insertion
+
+Not supported in native mode (fall back to image):
+- CSS gradients → solid color approximation
+- Box shadows → omitted
+- Custom web fonts → system fonts
+- SVG graphics → rasterize to PNG
 
 ## Export to PNG
 

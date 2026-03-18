@@ -2,15 +2,15 @@
 """
 export-pptx.py — Export slide-creator HTML presentations to PPTX.
 
-Uses Playwright with your existing system Chrome to take pixel-perfect
-screenshots of each slide, then assembles them into a PowerPoint file.
-No Chromium download needed if Chrome/Edge/Brave is already installed.
+Supports two export modes:
+  --mode image  (default): Pixel-perfect screenshots, no editing
+  --mode native:           Editable text/shapes/tables, simplified visuals
 
 Usage:
-    python export-pptx.py <presentation.html> [output.pptx] [--width W] [--height H]
+    python export-pptx.py <presentation.html> [output.pptx] [--mode image|native] [--width W] [--height H]
 
 Dependencies:
-    pip install playwright python-pptx
+    pip install playwright python-pptx beautifulsoup4 lxml
     (No browser download needed if Chrome is already installed)
 """
 
@@ -227,10 +227,24 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("html", help="Path to the HTML presentation")
     parser.add_argument("output", nargs="?", help="Output .pptx path (default: same name as HTML)")
+    parser.add_argument("--mode", choices=["image", "native"], default="image",
+                        help="Export mode: 'image' (pixel-perfect, not editable) or 'native' (editable text, simplified visuals)")
     parser.add_argument("--width",  type=int, default=1440, help="Viewport width  (default: 1440)")
     parser.add_argument("--height", type=int, default=900,  help="Viewport height (default: 900)")
     args = parser.parse_args()
-    export(args.html, args.output, args.width, args.height)
+
+    if args.mode == "native":
+        # Import and use native export
+        try:
+            from export_native_pptx import export_native
+            export_native(args.html, args.output, args.width, args.height)
+        except ImportError as e:
+            print(f"Error: Native mode requires additional dependencies.")
+            print(f"  Install with: pip install beautifulsoup4 lxml")
+            print(f"  Details: {e}")
+            sys.exit(1)
+    else:
+        export(args.html, args.output, args.width, args.height)
 
 
 if __name__ == "__main__":

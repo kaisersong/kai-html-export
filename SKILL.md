@@ -1,7 +1,7 @@
 ---
 name: kai-html-export
 description: Export any HTML file to PPTX or PNG. Use when the user wants to convert an HTML presentation to PowerPoint, screenshot a web page, or export an HTML report as an image. Triggers: /kai-html-export, --pptx, --png, "export to pptx", "screenshot html", "convert html to powerpoint".
-version: 1.0.0
+version: 1.0.2
 metadata: {"openclaw":{"emoji":"📤","os":["darwin","linux","windows"],"requires":{"bins":["python3"]},"install":[{"id":"python-pptx","kind":"uv","package":"python-pptx","label":"python-pptx (PPTX assembly)"},{"id":"playwright","kind":"uv","package":"playwright","label":"Playwright (headless browser for screenshots)"}]}}
 ---
 

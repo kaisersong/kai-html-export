@@ -6,7 +6,7 @@
 
 一个 Claude Code 技能，通过无头浏览器将 HTML 文件转换为可分享的格式。无需 Node.js，使用你已安装的系统 Chrome。
 
-**v1.0.0** — 初始版本。支持 PPTX 导出（逐幻灯片）和全页 PNG 截图。
+**v1.0.2** — Bug 修复：PPTX 导出现在能正确处理 scroll-snap。使用 `locator().screenshot()` 替代 `window.scrollTo()`，防止使用 `scroll-snap-type: y mandatory` 的 HTML 演示文稿出现幻灯片错位。
 
 ## 安装
 

@@ -93,6 +93,26 @@ class TestPptxExport:
         r = run_export([str(FIXTURES / "simple_slides.html"), str(out)])
         assert "3" in r.stdout, f"Expected slide count in stdout: {r.stdout}"
 
+    def test_scroll_snap_not_misaligned(self, tmp_path):
+        """HTML with scroll-snap-type: y mandatory should export without slide misalignment.
+
+        Regression test for: PPTX slides misaligned when HTML uses scroll-snap.
+
+        Bug cause: window.scrollTo() with scroll-snap snaps to wrong position,
+        causing screenshots to capture wrong slides (e.g., slide 2 shows slide 6 content).
+
+        Fix: Use locator().nth(i).screenshot() to capture each slide element directly,
+        bypassing scroll positioning entirely.
+        """
+        out = tmp_path / "out.pptx"
+        r = run_export([str(FIXTURES / "scroll_snap_slides.html"), str(out)])
+        assert r.returncode == 0, f"Script failed:\n{r.stderr}"
+        assert out.exists(), "Output PPTX not created"
+        prs = Presentation(str(out))
+        # 5 slides in scroll_snap_slides.html
+        assert len(prs.slides) == 5, \
+            f"Expected 5 slides, got {len(prs.slides)} — possible scroll-snap misalignment"
+
 
 # ─── Error cases ─────────────────────────────────────────────────────────────
 

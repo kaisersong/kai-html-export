@@ -51,6 +51,7 @@ from pptx.util import Inches
 # CSS injected before screenshotting to:
 # 1. Disable all animations/transitions so content is immediately fully visible
 # 2. Force .reveal elements (which start invisible) to be shown
+# 3. Disable scroll-snap to allow precise positioning for screenshots
 DISABLE_ANIMATIONS_CSS = """
 *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -62,6 +63,9 @@ DISABLE_ANIMATIONS_CSS = """
     opacity: 1 !important;
     transform: none !important;
     filter: none !important;
+}
+html, body {
+    scroll-snap-type: none !important;
 }
 """
 
@@ -144,10 +148,6 @@ def screenshot_slides(html_path, output_dir, width=1440, height=900):
         print(f"  Found {slide_count} slides. Capturing...")
 
         for i in range(slide_count):
-            # Scroll this slide into view
-            page.evaluate(f"document.querySelectorAll('.slide')[{i}].scrollIntoView()")
-            page.wait_for_timeout(150)
-
             # Get title for progress display
             title = page.evaluate(f"""
                 (() => {{
@@ -159,7 +159,9 @@ def screenshot_slides(html_path, output_dir, width=1440, height=900):
             print(f"  [{i+1}/{slide_count}] {title}")
 
             img_path = output_dir / f"slide_{i:03d}.png"
-            page.screenshot(path=str(img_path), full_page=False)
+            # Screenshot the slide element directly — avoids scroll-snap positioning bugs
+            # where window.scrollTo() could land on a snapped position ≠ the target slide
+            page.locator('.slide').nth(i).screenshot(path=str(img_path))
             screenshots.append(img_path)
 
         browser.close()

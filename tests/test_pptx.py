@@ -132,3 +132,59 @@ class TestPptxErrorCases:
         out = tmp_path / "out.pptx"
         r = run_export([str(tmp_path / "ghost.html"), str(out)])
         assert r.returncode != 0, "Expected non-zero exit for missing file"
+
+
+# ─── Native mode ─────────────────────────────────────────────────────────────
+
+class TestNativeMode:
+    """Tests for --mode native (editable text/shapes via BS4 parsing)."""
+
+    def test_native_mode_creates_pptx(self, tmp_path):
+        """--mode native should create a valid PPTX file."""
+        out = tmp_path / "out.pptx"
+        r = run_export([str(FIXTURES / "simple_slides.html"), str(out), "--mode", "native"])
+        assert r.returncode == 0, f"Script failed:\n{r.stderr}"
+        assert out.exists(), "PPTX not created in native mode"
+        assert out.stat().st_size > 5_000, "PPTX is suspiciously small"
+
+    def test_native_mode_slide_count_matches(self, tmp_path):
+        """--mode native: 3 .slide elements → PPTX should have exactly 3 slides."""
+        out = tmp_path / "out.pptx"
+        r = run_export([str(FIXTURES / "simple_slides.html"), str(out), "--mode", "native"])
+        assert r.returncode == 0, f"Script failed:\n{r.stderr}"
+        prs = Presentation(str(out))
+        assert len(prs.slides) == 3, f"Expected 3 slides, got {len(prs.slides)}"
+
+    def test_native_mode_importlib_dispatch(self, tmp_path):
+        """export-pptx.py must dispatch to export-native-pptx.py via importlib.
+
+        Regression test for: native mode silently fell back to image mode
+        because 'from export_native_pptx import ...' fails on hyphenated filenames.
+        Fix: importlib.util.spec_from_file_location loads the file by path.
+        """
+        out = tmp_path / "out.pptx"
+        r = run_export([str(FIXTURES / "simple_slides.html"), str(out), "--mode", "native"])
+        # If importlib dispatch is broken, the script either crashes or
+        # falls back to image mode (which would not print native-mode output).
+        assert r.returncode == 0, f"importlib dispatch failed:\n{r.stderr}"
+        # export-native-pptx.py prints output that doesn't contain "Capturing..."
+        # (which is image-mode language). Native mode uses different log messages.
+        assert "Capturing" not in r.stdout, \
+            "Output looks like image mode — native mode may not have been dispatched"
+
+    def test_native_mode_missing_file_exits_nonzero(self, tmp_path):
+        """--mode native with nonexistent input → non-zero exit code."""
+        out = tmp_path / "out.pptx"
+        r = run_export([str(tmp_path / "ghost.html"), str(out), "--mode", "native"])
+        assert r.returncode != 0, "Expected non-zero exit for missing file in native mode"
+
+    def test_both_modes_same_slide_count(self, tmp_path):
+        """image mode and native mode must produce the same slide count."""
+        out_image = tmp_path / "image.pptx"
+        out_native = tmp_path / "native.pptx"
+        run_export([str(FIXTURES / "simple_slides.html"), str(out_image), "--mode", "image"])
+        run_export([str(FIXTURES / "simple_slides.html"), str(out_native), "--mode", "native"])
+        count_image = len(Presentation(str(out_image)).slides)
+        count_native = len(Presentation(str(out_native)).slides)
+        assert count_image == count_native, \
+            f"Slide count mismatch: image={count_image}, native={count_native}"

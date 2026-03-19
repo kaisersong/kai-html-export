@@ -1,7 +1,7 @@
 ---
 name: kai-html-export
 description: Export any HTML file to PPTX or PNG. Use when the user wants to convert an HTML presentation to PowerPoint, screenshot a web page, or export an HTML report as an image. Triggers: /kai-html-export, --pptx, --png, "export to pptx", "screenshot html", "convert html to powerpoint", "导出为ppt", "导出ppt", "生成ppt", "转成ppt", "导出幻灯片", "html转ppt", "保存为ppt", "可编辑的ppt", "native模式", "导出为可编辑".
-version: 1.1.0
+version: 1.1.1
 metadata: {"openclaw":{"emoji":"📤","os":["darwin","linux","windows"],"requires":{"bins":["python3"]},"install":[{"id":"python-pptx","kind":"uv","package":"python-pptx","label":"python-pptx (PPTX assembly)"},{"id":"playwright","kind":"uv","package":"playwright","label":"Playwright (headless browser for screenshots)"},{"id":"beautifulsoup4","kind":"uv","package":"beautifulsoup4","label":"BeautifulSoup4 (HTML parsing for native export)"},{"id":"lxml","kind":"uv","package":"lxml","label":"lxml (HTML parser backend)"}]}}
 ---
 

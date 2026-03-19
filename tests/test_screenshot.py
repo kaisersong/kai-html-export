@@ -35,11 +35,11 @@ class TestScreenshot:
         assert out.exists(), "PNG not created"
 
     def test_default_width_is_1440(self, tmp_path):
-        """Default viewport → PNG width should be 1440px."""
+        """Default viewport (scale=2) → PNG width should be 2880px (1440 × 2)."""
         out = tmp_path / "out.png"
         run_screenshot([str(FIXTURES / "report.html"), str(out)])
         img = Image.open(out)
-        assert img.width == 1440, f"Expected width 1440, got {img.width}"
+        assert img.width == 2880, f"Expected width 2880, got {img.width}"
 
     def test_file_has_content(self, tmp_path):
         """Output PNG should be larger than 5 KB."""
@@ -58,12 +58,12 @@ class TestScreenshot:
         assert png.exists(), f"Expected {png} to be created"
 
     def test_custom_width(self, tmp_path):
-        """--width 800 → PNG width should be 800px."""
+        """--width 800 → PNG width should be 1600px (800 × default scale 2)."""
         out = tmp_path / "out.png"
         r = run_screenshot([str(FIXTURES / "report.html"), str(out), "--width", "800"])
         assert r.returncode == 0, f"Script failed:\n{r.stderr}"
         img = Image.open(out)
-        assert img.width == 800, f"Expected width 800, got {img.width}"
+        assert img.width == 1600, f"Expected width 1600, got {img.width}"
 
     def test_scale_2x_doubles_width(self, tmp_path):
         """--scale 2 → PNG width should be 2 × viewport width (2880 at default 1440)."""
@@ -74,10 +74,10 @@ class TestScreenshot:
         assert img.width == 2880, f"Expected width 2880, got {img.width}"
 
     def test_scale_2x_doubles_height(self, tmp_path):
-        """--scale 2 → PNG height should also be doubled."""
+        """--scale 2 → PNG height should be 2× the --scale 1 height."""
         out_1x = tmp_path / "out_1x.png"
         out_2x = tmp_path / "out_2x.png"
-        run_screenshot([str(FIXTURES / "report.html"), str(out_1x)])
+        run_screenshot([str(FIXTURES / "report.html"), str(out_1x), "--scale", "1"])
         run_screenshot([str(FIXTURES / "report.html"), str(out_2x), "--scale", "2"])
         h1 = Image.open(out_1x).height
         h2 = Image.open(out_2x).height

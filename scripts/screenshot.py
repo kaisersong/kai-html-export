@@ -9,8 +9,8 @@ Usage:
     python screenshot.py <file.html> [output.png] [--width W] [--scale N]
 
 Examples:
-    python screenshot.py report.html                    # 1440px wide, 1x
-    python screenshot.py report.html out.png --scale 2  # 2x retina quality
+    python screenshot.py report.html                    # 1440px wide, 2x (default)
+    python screenshot.py report.html out.png --scale 3  # 3x ultra quality
     python screenshot.py report.html --width 800        # Mobile-ish width
 
 Dependencies:
@@ -133,7 +133,7 @@ def main():
     parser.add_argument("html", help="Path to the HTML file")
     parser.add_argument("output", nargs="?", help="Output .png path (default: same name as HTML)")
     parser.add_argument("--width", type=int, default=1440, help="Viewport width in pixels (default: 1440)")
-    parser.add_argument("--scale", type=int, default=1, help="Device pixel ratio, e.g. 2 for retina (default: 1)")
+    parser.add_argument("--scale", type=int, default=2, help="Device pixel ratio, e.g. 2 for retina (default: 2)")
     args = parser.parse_args()
     screenshot(args.html, args.output, args.width, args.scale)
 

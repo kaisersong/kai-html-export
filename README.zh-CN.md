@@ -6,7 +6,7 @@
 
 一个 Claude Code 技能，通过无头浏览器将 HTML 文件转换为可分享的格式。无需 Node.js，使用你已安装的系统 Chrome。
 
-**v1.0.2** — Bug 修复：PPTX 导出现在能正确处理 scroll-snap。使用 `locator().screenshot()` 替代 `window.scrollTo()`，防止使用 `scroll-snap-type: y mandatory` 的 HTML 演示文稿出现幻灯片错位。
+**v1.1.3** — Native 模式改进：修复 inline 背景色块坐标系不一致问题（JS 使用 108 px/in，Python 使用 96 px/in，直接使用 Chrome 坐标导致色块位置偏移）；condensed 字体检测现在同时检查子元素；为 CJK 扩展添加宽度阈值，防止宽容器溢出边界。
 
 ## 安装
 

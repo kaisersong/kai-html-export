@@ -6,7 +6,7 @@ English | [简体中文](README.zh-CN.md)
 
 A Claude Code skill that converts HTML files into portable formats using a headless browser. No Node.js required — uses your existing system Chrome.
 
-**v1.0.2** — Bug fix: PPTX export now handles scroll-snap correctly. Uses `locator().screenshot()` instead of `window.scrollTo()` to prevent slide misalignment in HTML presentations with `scroll-snap-type: y mandatory`.
+**v1.1.3** — Native mode improvements: fixed inline background shape coordinate system (JS uses 108 px/in, Python uses 96 px/in — using Chrome coords directly caused misalignment); condensed font detection now checks child elements; added width threshold for CJK expansion to prevent wide containers from overflowing.
 
 ## Install
 

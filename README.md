@@ -6,7 +6,9 @@ English | [简体中文](README.zh-CN.md)
 
 A Claude Code skill that converts HTML files into portable formats using a headless browser. No Node.js required — uses your existing system Chrome.
 
-**v1.1.3** — Native mode improvements: fixed inline background shape coordinate system (JS uses 108 px/in, Python uses 96 px/in — using Chrome coords directly caused misalignment); condensed font detection now checks child elements; added width threshold for CJK expansion to prevent wide containers from overflowing.
+**v1.1.3** — Native mode: inline background shapes, condensed font detection, CJK width compensation, fixed-chrome nav dots.
+
+---
 
 ## Install
 
@@ -14,7 +16,7 @@ A Claude Code skill that converts HTML files into portable formats using a headl
 
 ```bash
 git clone https://github.com/kaisersong/kai-html-export ~/.claude/skills/kai-html-export
-pip install playwright python-pptx
+pip install playwright python-pptx beautifulsoup4 lxml
 ```
 
 ### OpenClaw / ClawHub
@@ -25,50 +27,100 @@ clawhub install kai-html-export
 
 > ClawHub page: https://clawhub.ai/skills/kai-html-export
 
-Dependencies (Playwright, python-pptx) are installed automatically by OpenClaw on first use.
+Dependencies are installed automatically by OpenClaw on first use.
 
 ---
 
 ## Usage
 
 ```
-/kai-html-export [file.html]          # Export HTML presentation to PPTX
-/kai-html-export --pptx [file.html]   # Explicit PPTX export
-/kai-html-export --png [file.html]    # Full-page screenshot to PNG
-/kai-html-export --png --scale 2      # 2× retina-quality PNG
+/kai-html-export [file.html]                    # PPTX (image mode, default)
+/kai-html-export --pptx [file.html]             # Explicit PPTX export
+/kai-html-export --pptx --mode native [file]    # Editable PPTX (native mode)
+/kai-html-export --png [file.html]              # Full-page screenshot to PNG
+/kai-html-export --png --scale 2                # 2× retina-quality PNG
 ```
 
 If no file is specified, the most recently modified `.html` in the current directory is used.
 
 ---
 
-## Export to PPTX
+## Export Modes
 
-Detects `.slide` elements in the HTML, captures each one as a pixel-perfect screenshot, and assembles them into a PowerPoint file.
+### Image Mode (default)
+
+Captures each slide as a pixel-perfect screenshot and assembles them into a PowerPoint file. Text is rasterized — not editable, but visually identical to the browser.
 
 ```bash
-# Produced by kai-slide-creator
 /kai-html-export presentation.html
 # → presentation.pptx  (16:9, 1440×900)
 ```
 
-Custom dimensions:
+| | Image Mode |
+|--|--|
+| Visual fidelity | ⭐⭐⭐⭐⭐ pixel-perfect |
+| Text editable | ❌ rasterized |
+| Best for | sharing, archiving final decks |
+
+---
+
+### Native Mode — Editable PPTX
+
+Reconstructs each slide as real PowerPoint shapes, text boxes, and tables. Text is fully editable in Keynote and PowerPoint.
+
 ```bash
-/kai-html-export presentation.html --width 1920 --height 1080
+/kai-html-export --pptx --mode native presentation.html
+# → presentation.pptx  (editable text, shapes, tables)
 ```
+
+| | Native Mode |
+|--|--|
+| Visual fidelity | ⭐⭐⭐ simplified |
+| Text editable | ✅ full text editing |
+| Best for | editing content, translating, repurposing slides |
+
+#### What native mode renders
+
+| Element | Support |
+|---------|---------|
+| Headings, paragraphs, lists | ✅ with font size, color, bold, alignment |
+| Inline text styles | ✅ bold, italic, strikethrough, color |
+| Inline background highlights | ✅ `<span style="background:…">` → colored shape behind text |
+| Solid-color shapes (div with background) | ✅ rectangles with fill |
+| Tables | ✅ editable cells with borders |
+| Images | ✅ native insertion |
+| Grid / dot / noise backgrounds | ✅ auto-detected and rendered |
+| `position:fixed` nav dots + progress bars | ✅ per-slide state computed from slide index |
+
+#### What native mode approximates or skips
+
+| Element | Behavior |
+|---------|---------|
+| CSS gradients | → solid color (average of gradient stops) |
+| Box shadows | → omitted |
+| Custom web fonts (e.g. Barlow, Inter) | → nearest system font |
+| SVG graphics | → rasterized to PNG |
+
+#### CJK (Chinese / Japanese / Korean) compensation
+
+PingFang SC and other CJK fonts render ~15% wider and ~30% taller in Keynote/PowerPoint than in Chrome. Native mode automatically compensates:
+
+- Text boxes with CJK content are widened by ×1.15
+- Condensed font containers (Barlow Condensed, etc.) are widened by ×1.30
+- Width expansion only applies to boxes narrower than 3 inches (prevents wide containers from overflowing)
+- Inline background shapes use PPTX coordinate system (not Chrome coordinates) to stay aligned with text
 
 ---
 
 ## Export to PNG
 
-Captures the full rendered page as a PNG image — useful for sharing reports or single-page HTML as images.
+Captures the full rendered page as a PNG — useful for sharing reports or single-page HTML as images.
 
 ```bash
-# Produced by kai-report-creator
 /kai-html-export --png report.html
 # → report.png
 
-# 2× resolution for retina / IM sharing
+# 2× resolution for retina / messaging apps
 /kai-html-export --png report.html --scale 2
 ```
 
@@ -79,13 +131,14 @@ Captures the full rendered page as a PNG image — useful for sharing reports or
 | Dependency | Purpose | Auto-installed (OpenClaw) |
 |-----------|---------|--------------------------|
 | Python 3 + `playwright` | Headless browser screenshots | ✅ via uv |
-| Python 3 + `python-pptx` | Assemble screenshots into PPTX | ✅ via uv |
+| Python 3 + `python-pptx` | Assemble PPTX | ✅ via uv |
+| `beautifulsoup4` + `lxml` | HTML parsing (native mode) | ✅ via uv |
 
 **Browser:** Uses system Chrome, Edge, or Brave first — no 300MB Chromium download. Falls back to Playwright Chromium if no system browser is found.
 
 **Claude Code users** — install manually:
 ```bash
-pip install playwright python-pptx
+pip install playwright python-pptx beautifulsoup4 lxml
 ```
 
 ---

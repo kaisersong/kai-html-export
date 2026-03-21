@@ -41,6 +41,7 @@ from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
 from pptx.enum.shapes import MSO_SHAPE
+from lxml import etree as _etree
 
 
 def set_roundrect_adj(shape, radius_px: float, width_in: float, height_in: float):
@@ -205,15 +206,19 @@ _EXTRACT_JS = r"""
         }
 
         const segments = [];
-        function walk(node, color, bold, fontSize) {
+        // Track the Chrome bounding rect of the nearest ancestor element that introduced
+        // an inline background. Used by Python to draw a tight background shape (instead of
+        // <a:highlight> which fills the full line cell and bleeds into adjacent lines).
+        let currentInlineBgBounds = null;
+        function walk(node, color, bold, fontSize, strike, bgColor) {
             if (node.nodeType === 3) {
                 const t = node.textContent;
                 // Preserve internal whitespace (e.g. " text" after <strong>Note:</strong>)
                 // but skip nodes that are purely whitespace
-                if (t && t.trim()) segments.push({text: t, color: color, bold: bold, fontSize: fontSize});
+                if (t && t.trim()) segments.push({text: t, color: color, bold: bold, fontSize: fontSize, strike: strike, bgColor: bgColor || null, inlineBgBounds: currentInlineBgBounds || null});
             } else if (node.nodeType === 1) {
                 const tag = node.tagName;
-                if (tag === 'BR') { segments.push({text: '\n', color: color, bold: bold, fontSize: fontSize}); return; }
+                if (tag === 'BR') { segments.push({text: '\n', color: color, bold: bold, fontSize: fontSize, strike: strike, bgColor: null, inlineBgBounds: null}); return; }
                 const s2 = window.getComputedStyle(node);
                 const bi = s2.backgroundImage || '';
                 const bc = s2.webkitBackgroundClip || s2.backgroundClip || '';
@@ -229,25 +234,56 @@ _EXTRACT_JS = r"""
                 const fw = s2.fontWeight;
                 if (fw === 'bold' || fw === '700' || fw === '800' || fw === '900' || parseInt(fw) >= 600) b = true;
                 const fs = s2.fontSize || fontSize;
-                for (const child of node.childNodes) walk(child, c, b, fs);
+                let sk = strike;
+                const td = s2.textDecoration || s2.textDecorationLine || '';
+                if (td.includes('line-through')) sk = true;
+                // Propagate inline background color (e.g. <span style="background:yellow">)
+                const childBg = s2.backgroundColor;
+                const childHasBg = childBg && childBg !== 'transparent' && childBg !== 'rgba(0, 0, 0, 0)';
+                const newBgColor = childHasBg ? childBg : bgColor;
+                // Capture Chrome bounding rect for elements that introduce a new background.
+                // Python uses this to draw a precisely-positioned background shape.
+                const prevInlineBgBounds = currentInlineBgBounds;
+                if (childHasBg) {
+                    const r = node.getBoundingClientRect();
+                    const st2 = window.getComputedStyle(node);
+                    const hPad = (parseFloat(st2.paddingLeft || '0') + parseFloat(st2.paddingRight || '0')) / 2;
+                    currentInlineBgBounds = {
+                        x: (r.left - slideRect.left) / PX_PER_IN,
+                        y: (r.top - slideRect.top) / PX_PER_IN,
+                        w: r.width / PX_PER_IN,
+                        h: r.height / PX_PER_IN,
+                        vPad: hPad / PX_PER_IN,
+                    };
+                }
+                for (const child of node.childNodes) walk(child, c, b, fs, sk, newBgColor);
+                currentInlineBgBounds = prevInlineBgBounds;  // restore after leaving element
             }
         }
 
         const baseColor = isGradient ? (gradientColor || elStyle.color) : elStyle.color;
         const baseBold = parseInt(elStyle.fontWeight) >= 600;
         const baseFontSize = elStyle.fontSize;
-        for (const child of el.childNodes) walk(child, baseColor, baseBold, baseFontSize);
+        const baseStrike = (elStyle.textDecoration || elStyle.textDecorationLine || '').includes('line-through');
+        for (const child of el.childNodes) walk(child, baseColor, baseBold, baseFontSize, baseStrike, null);
 
-        // Merge consecutive same-color+bold+fontSize segments
+        // Merge consecutive same-color+bold+fontSize+strike+bgColor+inlineBgBounds segments
         const merged = [];
         for (const seg of segments) {
+            const prevIbb = merged.length > 0 ? merged[merged.length-1].inlineBgBounds : null;
+            const curIbb = seg.inlineBgBounds;
+            const sameIbb = (!prevIbb && !curIbb) ||
+                (prevIbb && curIbb && Math.abs(prevIbb.x - curIbb.x) < 0.001 && Math.abs(prevIbb.w - curIbb.w) < 0.001);
             if (merged.length > 0 && merged[merged.length-1].color === seg.color &&
                 merged[merged.length-1].bold === seg.bold &&
                 merged[merged.length-1].fontSize === seg.fontSize &&
+                merged[merged.length-1].strike === seg.strike &&
+                merged[merged.length-1].bgColor === seg.bgColor &&
+                sameIbb &&
                 seg.text !== '\n' && merged[merged.length-1].text !== '\n') {
                 merged[merged.length-1].text += seg.text;
             } else {
-                merged.push({text: seg.text, color: seg.color, bold: seg.bold, fontSize: seg.fontSize});
+                merged.push({text: seg.text, color: seg.color, bold: seg.bold, fontSize: seg.fontSize, strike: seg.strike, bgColor: seg.bgColor || null, inlineBgBounds: seg.inlineBgBounds || null});
             }
         }
 
@@ -255,6 +291,15 @@ _EXTRACT_JS = r"""
     }
 
     const TEXT_TAGS = new Set(['h1','h2','h3','h4','h5','h6','p','li','span','a']);
+
+    // CJK width correction factor: PingFang SC / Source Han is ~15% wider than Chrome's
+    // Latin fallback. Apply to bordered/backgrounded shapes that contain CJK text so they
+    // don't clip the text in Keynote/PowerPoint.
+    const CJK_BOX_FACTOR = 1.15;
+    const CJK_V_FACTOR = 1.30;
+    function hasCJK(text) {
+        return /[\u2E80-\u9FFF\uF900-\uFAFF\uFE10-\uFE6F\uFF00-\uFFEF]/.test(text);
+    }
 
     // Flat recursive traversal
     function flatExtract(el) {
@@ -293,8 +338,19 @@ _EXTRACT_JS = r"""
         if (TEXT_TAGS.has(tag)) {
             // If element has visible background/border (e.g. .pill badge span), emit a shape first
             if (hasBg || hasBorder) {
+                const elText = el.innerText || '';
+                const elFontStr = style.fontFamily || '';
+                const elIsCondensed = /condensed|narrow|compressed/i.test(elFontStr);
+                // Condensed fonts (e.g. Barlow Condensed) get a 30% width boost to compensate for
+                // system font substitution in PPTX. CJK expansion only applies to small boxes (<3in)
+                // to avoid blowing up wide containers like list items with border-left.
+                const cjkShapeW = hasBorder ? (
+                    elIsCondensed ? bounds.width * 1.50 :
+                    (hasCJK(elText) && bounds.width < 3.0 ? bounds.width * CJK_BOX_FACTOR : bounds.width)
+                ) : bounds.width;
                 results.push({
-                    type: 'shape', tag: tag, bounds: bounds,
+                    type: 'shape', tag: tag,
+                    bounds: { x: bounds.x, y: bounds.y, width: cjkShapeW, height: bounds.height },
                     styles: {
                         backgroundColor: bgColor,
                         backgroundImage: '',
@@ -304,10 +360,22 @@ _EXTRACT_JS = r"""
                     }
                 });
             }
+            // Inline child bg colors are captured inside extractSegments (bgColor on each segment)
+            // and rendered as <a:highlight> text run properties — no separate shape needed.
             // Text element - render as text box
             const {segments, gradientColors} = extractSegments(el);
             const text = el.innerText.trim();
             if (text || segments.length > 0) {
+                const elFontStr2 = style.fontFamily || '';
+                const elIsCondensed2 = /condensed|narrow|compressed/i.test(elFontStr2);
+                // Condensed fonts: expand text box without requiring hasBorder
+                // CJK: expand only for small bordered boxes to avoid wide list-item overflow
+                const cjkTxtFactor = elIsCondensed2 ? 1.50 :
+                    (hasBorder && hasCJK(text) && bounds.width < 3.0 ? CJK_BOX_FACTOR : 1.0);
+                const txtBounds = cjkTxtFactor === 1.0 ? bounds : {
+                    x: bounds.x, y: bounds.y,
+                    width: bounds.width * cjkTxtFactor, height: bounds.height
+                };
                 results.push({
                     type: 'text',
                     tag: tag,
@@ -329,7 +397,7 @@ _EXTRACT_JS = r"""
                         el.style.maxHeight = savedMaxH;
                         return Math.max(rect.height, naturalH) / PX_PER_IN;
                     })(),
-                    bounds: bounds,
+                    bounds: txtBounds,
                     styles: {
                         fontSize: style.fontSize,
                         fontWeight: style.fontWeight,
@@ -405,7 +473,7 @@ _EXTRACT_JS = r"""
             // Detect "leaf-text container": a div whose entire visible content is text
             // Case A: no child elements at all — e.g. <div class="chapter-num">01</div>
             // Case B: only inline child elements + sibling text nodes — e.g. <div class="co"><strong>Note:</strong> more text</div>
-            const INLINE_TAGS = new Set(['STRONG','EM','B','I','SPAN','A','MARK','CODE','SMALL','KBD','VAR','ABBR','TIME','SUP','SUB']);
+            const INLINE_TAGS = new Set(['STRONG','EM','B','I','SPAN','A','MARK','CODE','SMALL','KBD','VAR','ABBR','TIME','SUP','SUB','BR']);
             const totalText = el.innerText.trim();
             const allChildInline = el.children.length > 0 &&
                 Array.from(el.children).every(c => INLINE_TAGS.has(c.tagName));
@@ -425,8 +493,12 @@ _EXTRACT_JS = r"""
                 // background-clip:text means gradient is used as text fill, not a visible background
                 const hasGradientBgLeaf = bgImageLeaf !== 'none' && bgImageLeaf.includes('gradient') && bgClipLeaf !== 'text';
                 if (hasBg || hasBorder || hasGradientBgLeaf) {
+                    const cjkLeafW = (hasBorder && hasCJK(totalText)) ? bounds.width * CJK_BOX_FACTOR : bounds.width;
+                    const leafBounds = cjkLeafW === bounds.width ? bounds : {
+                        x: bounds.x, y: bounds.y, width: cjkLeafW, height: bounds.height
+                    };
                     results.push({
-                        type: 'shape', tag: tag, bounds: bounds,
+                        type: 'shape', tag: tag, bounds: leafBounds,
                         styles: {
                             backgroundColor: bgColor,
                             backgroundImage: hasGradientBgLeaf ? bgImageLeaf : '',
@@ -436,13 +508,20 @@ _EXTRACT_JS = r"""
                         }
                     });
                 }
+                // Inline bg colors are captured via extractSegments bgColor field → text run highlight
                 // Then: render the whole container as a text box (captures direct text + inline formatting)
                 const {segments, gradientColors} = extractSegments(el);
+                // Condensed fonts: expand text box to compensate for system font substitution
+                const hd_fontStr = style.fontFamily || '';
+                const hd_isCondensed = /condensed|narrow|compressed/i.test(hd_fontStr);
+                const textBounds = hd_isCondensed
+                    ? {x: bounds.x, y: bounds.y, width: bounds.width * 1.50, height: bounds.height}
+                    : bounds;
                 results.push({
                     type: 'text', tag: tag, text: totalText,
                     segments: segments, gradientColors: gradientColors,
                     textTransform: style.textTransform,
-                    bounds: bounds,
+                    bounds: textBounds,
                     styles: {
                         fontSize: style.fontSize, fontWeight: style.fontWeight,
                         fontFamily: style.fontFamily, letterSpacing: style.letterSpacing,
@@ -460,10 +539,26 @@ _EXTRACT_JS = r"""
             const bgImage = style.backgroundImage || 'none';
             const hasGradientBg = bgImage !== 'none' && bgImage.includes('gradient');
             if (hasBg || hasBorder || hasGradientBg) {
+                const containerText = el.innerText || '';
+                // Condensed fonts: check self AND direct children (parent div may not inherit
+                // the font-family set on a child .headline element).
+                const containerFontStr = style.fontFamily || '';
+                const isCondensedContainer = /condensed|narrow|compressed/i.test(containerFontStr) ||
+                    Array.from(el.children).some(ch =>
+                        /condensed|narrow|compressed/i.test(window.getComputedStyle(ch).fontFamily));
+                // Condensed: expand always (title blocks can be wide — no width gate)
+                // CJK: only expand small boxes (<3in) to avoid blowing up wide list containers
+                const cjkContainerW = hasBorder ? (
+                    isCondensedContainer ? bounds.width * 1.50 :
+                    (hasCJK(containerText) && bounds.width < 3.0 ? bounds.width * CJK_BOX_FACTOR : bounds.width)
+                ) : bounds.width;
+                const containerBounds = cjkContainerW === bounds.width ? bounds : {
+                    x: bounds.x, y: bounds.y, width: cjkContainerW, height: bounds.height
+                };
                 results.push({
                     type: 'shape',
                     tag: tag,
-                    bounds: bounds,
+                    bounds: containerBounds,
                     styles: {
                         backgroundColor: bgColor,
                         backgroundImage: hasGradientBg ? bgImage : '',
@@ -494,23 +589,89 @@ _EXTRACT_JS = r"""
 
     // Also try to extract gradient stops for slide background
     let bgGradient = null;
+    let gridBg = null;
     const bodyBgImg = window.getComputedStyle(document.body).backgroundImage || '';
-    if (bodyBgImg.includes('gradient')) {
-        const stops = bodyBgImg.match(/rgba?\([^)]+\)/g);
-        if (stops && stops.length >= 2) bgGradient = [stops[0], stops[stops.length - 1]];
-    }
-    if (!bgGradient) {
-        const slideBgImg = window.getComputedStyle(slide).backgroundImage || '';
-        if (slideBgImg.includes('gradient')) {
-            const stops = slideBgImg.match(/rgba?\([^)]+\)/g);
+    // Detect grid pattern: two crossing linear-gradients (one at 90deg) = grid
+    // Check body first (grid is often on body), then fall back to slide element
+    const slideBgImgFull = window.getComputedStyle(slide).backgroundImage || '';
+    const gridSourceImg = (bodyBgImg.match(/linear-gradient/g) || []).length >= 2 && bodyBgImg.includes('90deg')
+        ? bodyBgImg : slideBgImgFull;
+    const gridSourceEl = (bodyBgImg.match(/linear-gradient/g) || []).length >= 2 && bodyBgImg.includes('90deg')
+        ? document.body : slide;
+    const gradientCount = (gridSourceImg.match(/linear-gradient/g) || []).length;
+    if (gradientCount >= 2 && gridSourceImg.includes('90deg')) {
+        // Grid pattern detected
+        const colorMatch = gridSourceImg.match(/rgba?\([^)]+\)/);
+        const sizeStr = window.getComputedStyle(gridSourceEl).backgroundSize || '';
+        const sizeMatch = sizeStr.match(/([\d.]+)px/);
+        const gridSizePx = sizeMatch ? parseFloat(sizeMatch[1]) : 24;
+        if (colorMatch) gridBg = {color: colorMatch[0], sizePx: gridSizePx};
+    } else {
+        if (bodyBgImg.includes('gradient') && (bodyBgImg.match(/linear-gradient/g) || []).length < 2) {
+            const stops = bodyBgImg.match(/rgba?\([^)]+\)/g);
             if (stops && stops.length >= 2) bgGradient = [stops[0], stops[stops.length - 1]];
+        }
+        if (!bgGradient) {
+            const slideBgImg = slideBgImgFull;
+            if (slideBgImg.includes('gradient') && (slideBgImg.match(/linear-gradient/g) || []).length < 2) {
+                const stops = slideBgImg.match(/rgba?\([^)]+\)/g);
+                if (stops && stops.length >= 2) bgGradient = [stops[0], stops[stops.length - 1]];
+            }
+        }
+    }
+
+    // Detect if the template already provides its own navigation chrome
+    // (.nav-dots, .slide-counter, etc.) — if so, skip PPTX chrome injection
+    const hasOwnChrome = !!(document.querySelector('.nav-dots') ||
+                            document.querySelector('.slide-counter') ||
+                            document.querySelector('.page-counter'));
+
+    // Extract fixed-position chrome: nav-dots + progress-bar
+    let fixedChrome = null;
+    const navDotsEl = document.querySelector('.nav-dots');
+    const progressBarEl = document.querySelector('.progress-bar');
+    if (navDotsEl || progressBarEl) {
+        fixedChrome = {};
+        if (navDotsEl) {
+            const buttons = navDotsEl.querySelectorAll('button');
+            const navRect = navDotsEl.getBoundingClientRect();
+            const dots = [];
+            buttons.forEach(btn => {
+                const r = btn.getBoundingClientRect();
+                const s = window.getComputedStyle(btn);
+                dots.push({
+                    x: r.left / PX_PER_IN,
+                    y: r.top / PX_PER_IN,
+                    w: r.width / PX_PER_IN,
+                    h: r.height / PX_PER_IN,
+                    bg: s.backgroundColor,
+                    border: s.borderColor,
+                    active: btn.classList.contains('active')
+                });
+            });
+            fixedChrome.navDots = dots;
+        }
+        if (progressBarEl) {
+            const r = progressBarEl.getBoundingClientRect();
+            const s = window.getComputedStyle(progressBarEl);
+            if (r.width > 2) {  // only capture if visible (width > 0)
+                fixedChrome.progressBar = {
+                    x: 0, y: 0,
+                    w: r.width / PX_PER_IN,
+                    h: r.height / PX_PER_IN,
+                    bg: s.backgroundColor
+                };
+            }
         }
     }
 
     return {
         background: bgColor,
         bgGradient: bgGradient,
+        gridBg: gridBg,
         elements: elements,
+        hasOwnChrome: hasOwnChrome,
+        fixedChrome: fixedChrome,
         slideSize: slideW && slideH ? {width: slideW/PX_PER_IN, height: slideH/PX_PER_IN} : null
     };
 }
@@ -530,7 +691,10 @@ def extract_slide_elements(page: Page, slide_index: int) -> Dict[str, Any]:
     return {
         'background': bg_rgb,
         'bgGradient': bg_gradient_rgb,
+        'gridBg': result.get('gridBg'),   # {color: "rgba(...)", sizePx: 24} or None
         'elements': result['elements'],
+        'hasOwnChrome': result.get('hasOwnChrome', False),
+        'fixedChrome': result.get('fixedChrome'),  # {navDots: [...], progressBar: {...}} or None
         'slideSize': result.get('slideSize')
     }
 
@@ -594,7 +758,9 @@ def segments_to_lines(segments):
         elif t.strip():
             # Preserve original text (including leading/trailing spaces between inline elements
             # e.g. "<strong>Note:</strong> text" produces " text" which must keep its leading space)
-            cleaned.append({'text': t, 'color': s['color'], 'bold': s.get('bold', False), 'fontSize': s.get('fontSize', '')})
+            cleaned.append({'text': t, 'color': s['color'], 'bold': s.get('bold', False),
+                            'fontSize': s.get('fontSize', ''), 'strike': s.get('strike', False),
+                            'bgColor': s.get('bgColor'), 'inlineBgBounds': s.get('inlineBgBounds')})
     segments = cleaned
     lines = []
     current_line = []
@@ -603,16 +769,18 @@ def segments_to_lines(segments):
         color = seg['color']
         bold = seg.get('bold', False)
         fontSize = seg.get('fontSize', '')
+        strike = seg.get('strike', False)
+        bg_color = seg.get('bgColor')
         if '\n' in text:
             parts = text.split('\n')
             for i, part in enumerate(parts):
                 if part:
-                    current_line.append({'text': part, 'color': color, 'bold': bold, 'fontSize': fontSize})
+                    current_line.append({'text': part, 'color': color, 'bold': bold, 'fontSize': fontSize, 'strike': strike, 'bgColor': bg_color, 'inlineBgBounds': seg.get('inlineBgBounds')})
                 if i < len(parts) - 1:
                     lines.append(current_line)
                     current_line = []
         else:
-            current_line.append({'text': text, 'color': color, 'bold': bold, 'fontSize': fontSize})
+            current_line.append({'text': text, 'color': color, 'bold': bold, 'fontSize': fontSize, 'strike': strike, 'bgColor': bg_color, 'inlineBgBounds': seg.get('inlineBgBounds')})
     lines.append(current_line)
     # Strip leading/trailing empty lines, but preserve internal empty lines (from <BR><BR>)
     result = lines
@@ -624,7 +792,7 @@ def segments_to_lines(segments):
 
 
 def apply_run(run, text, color_str, font_size_pt, font_weight,
-              text_transform='none', font_family='', letter_spacing=''):
+              text_transform='none', font_family='', letter_spacing='', strike=False, bg_color_str=None):
     if text_transform == 'uppercase':
         text = text.upper()
     run.text = text
@@ -649,8 +817,54 @@ def apply_run(run, text, color_str, font_size_pt, font_weight,
     rgb = parse_color(color_str)
     if rgb:
         run.font.color.rgb = RGBColor(*rgb)
+    if strike:
+        # python-pptx 1.0.x: Font.strike is not a real property; set via XML
+        _ns = 'http://schemas.openxmlformats.org/drawingml/2006/main'
+        _rPr = run._r.find(f'{{{_ns}}}rPr')
+        if _rPr is None:
+            _rPr = _etree.SubElement(run._r, f'{{{_ns}}}rPr')
+            run._r.insert(0, _rPr)
+        _rPr.set('strike', 'sngStrike')
     # P1: letter-spacing
     set_letter_spacing(run, letter_spacing)
+
+
+def add_grid_background(slide, slide_w_in: float, slide_h_in: float,
+                        grid_color_str: str, grid_size_px: float):
+    """Render a CSS repeating-linear-gradient grid as a full-slide PNG picture."""
+    import io
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError:
+        return  # skip if Pillow not available
+    scale = 3  # 3x resolution for crisp lines
+    w = int(slide_w_in * 96 * scale)
+    h = int(slide_h_in * 96 * scale)
+    grid_px = max(1, int(grid_size_px * scale))
+    img = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    # Parse rgba(r,g,b,a)
+    m = re.match(r'rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)', grid_color_str.strip())
+    if m:
+        r, g, b = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        a = float(m.group(4) or '1.0')
+        line_color = (r, g, b, int(a * 255))
+    else:
+        line_color = (80, 100, 170, 25)
+    for y in range(0, h, grid_px):
+        draw.line([(0, y), (w - 1, y)], fill=line_color, width=1)
+    for x in range(0, w, grid_px):
+        draw.line([(x, 0), (x, h - 1)], fill=line_color, width=1)
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    from pptx.util import Inches
+    pic = slide.shapes.add_picture(buf, Inches(0), Inches(0),
+                                   Inches(slide_w_in), Inches(slide_h_in))
+    # Move grid picture to just above background (z-index 2) so content stays on top
+    sp_tree = slide.shapes._spTree
+    sp_tree.remove(pic._element)
+    sp_tree.insert(2, pic._element)
 
 
 def apply_para_format(p, s):
@@ -855,6 +1069,62 @@ def export_text_element(slide, elem: Dict[str, Any], bg_color=None):
     natural_h = elem.get('naturalHeight', b['height'])
     effective_h = max(b['height'], natural_h)
 
+    if not segments:
+        raw = (elem.get('text', '') or '').strip()
+        segments = [{'text': raw, 'color': s.get('color', '')}]
+
+    lines = segments_to_lines(segments)
+    if not lines:
+        lines = [[{'text': '', 'color': s.get('color', '')}]]
+
+    # Pre-pass: draw inline background shapes BEFORE text box (text on top in z-order).
+    #
+    # Coordinate system note:
+    #   JS element bounds use PX_PER_IN = slideRect.width/13.33 ≈ 108 px/in.
+    #   Python CSS properties (font-size, line-height) use ×0.75 ≡ 96 px/in.
+    #   These differ by 108/96 = 1.125×, so ibg['y'] (Chrome, 108-based) is 12.5%
+    #   smaller per-line than the PPTX line position (96-based). Using ibg['y'] directly
+    #   puts the block too high; using b['y'] + line_idx*lh_pptx (PPTX coords) is correct.
+    #
+    # Formula:
+    #   bg_y = b['y'] + line_idx × lh_pptx − vPad    (PPTX line top, shift up by vPad)
+    #   bg_h = font_size_in + 2 × vPad               (em-square ± vPad above and below)
+    #   vPad = avg CSS horizontal padding of span / PX_PER_IN  (same proportion as h-pad)
+    _lh = s.get('lineHeight', 'normal')
+    if _lh != 'normal' and 'px' in str(_lh):
+        _lh_m = re.search(r'([\d.]+)', str(_lh))
+        _lh_pptx_in = float(_lh_m.group(1)) * 0.75 / 72 if _lh_m else font_size_pt / 72.0
+    else:
+        try:
+            _lh_ratio = float(_lh) if _lh != 'normal' else 1.2
+        except Exception:
+            _lh_ratio = 1.2
+        _lh_pptx_in = font_size_pt * _lh_ratio / 72.0
+
+    for _li, _lsegs in enumerate(lines):
+        _seen_x: set = set()
+        for _seg in _lsegs:
+            _ibg = _seg.get('inlineBgBounds')
+            if _ibg and _seg.get('bgColor'):
+                _bg_rgb = parse_color(_seg['bgColor'])
+                if not _bg_rgb:
+                    continue
+                _xk = round(_ibg['x'], 3)
+                if _xk in _seen_x:
+                    continue
+                _seen_x.add(_xk)
+                _v_pad = _ibg.get('vPad', 0)
+                _bg_y = b['y'] + _li * _lh_pptx_in - _v_pad   # PPTX line top − vPad
+                _bg_h = font_size_pt / 72.0 + 2 * _v_pad       # em-square + vPad above+below
+                _bg_shape = slide.shapes.add_shape(1,
+                    Inches(b['x'] + (_ibg['x'] - b['x']) * 1.15),
+                    Inches(_bg_y),
+                    Inches(_ibg['w'] * 1.15),
+                    Inches(_bg_h))
+                _bg_shape.fill.solid()
+                _bg_shape.fill.fore_color.rgb = RGBColor(*_bg_rgb)
+                _bg_shape.line.fill.background()
+
     txBox = slide.shapes.add_textbox(
         Inches(b['x']), Inches(b['y']),
         Inches(b['width']), Inches(effective_h)
@@ -908,14 +1178,6 @@ def export_text_element(slide, elem: Dict[str, Any], bg_color=None):
         from pptx.oxml.ns import qn
         tf._txBody.attrib['anchor'] = 'ctr'
 
-    if not segments:
-        raw = (elem.get('text', '') or '').strip()
-        segments = [{'text': raw, 'color': s.get('color', '')}]
-
-    lines = segments_to_lines(segments)
-    if not lines:
-        lines = [[{'text': '', 'color': s.get('color', '')}]]
-
     # H1 渐变近似：多行时按比例分配渐变色
     gradient_colors = elem.get('gradientColors') if elem.get('tag') == 'h1' else None
     gc_start = parse_color(gradient_colors[0]) if gradient_colors else None
@@ -960,7 +1222,8 @@ def export_text_element(slide, elem: Dict[str, Any], bg_color=None):
             seg_fs_raw = seg.get('fontSize', '')
             seg_font_size_pt = px_to_pt(seg_fs_raw) if seg_fs_raw and 'px' in str(seg_fs_raw) else font_size_pt
             apply_run(run, seg['text'], color, seg_font_size_pt, seg_weight, text_transform,
-                      font_family=font_family, letter_spacing=letter_spacing)
+                      font_family=font_family, letter_spacing=letter_spacing,
+                      strike=seg.get('strike', False), bg_color_str=seg.get('bgColor'))
 
 
 def export_shape_with_text(slide, elem: Dict[str, Any], bg_color=None):
@@ -1037,7 +1300,8 @@ def export_shape_with_text(slide, elem: Dict[str, Any], bg_color=None):
             run = p.add_run()
             seg_weight = 'bold' if seg.get('bold') else font_weight
             apply_run(run, seg['text'], seg['color'], font_size_pt, seg_weight, text_transform,
-                      font_family=font_family, letter_spacing=letter_spacing)
+                      font_family=font_family, letter_spacing=letter_spacing,
+                      strike=seg.get('strike', False), bg_color_str=seg.get('bgColor'))
 
 
 def export_table_element(slide, elem: Dict[str, Any]):
@@ -1122,7 +1386,8 @@ def export_table_element(slide, elem: Dict[str, Any]):
                     run = p.add_run()
                     seg_weight = 'bold' if seg.get('bold') else font_weight
                     apply_run(run, seg['text'], seg['color'], font_size_pt, seg_weight,
-                              font_family=font_family, letter_spacing=letter_spacing)
+                              font_family=font_family, letter_spacing=letter_spacing,
+                              strike=seg.get('strike', False))
 
 
 def apply_slide_gradient_bg(slide, color1: tuple, color2: tuple, angle_deg: float = 135.0):
@@ -1192,6 +1457,63 @@ def add_slide_chrome(slide, slide_idx: int, slide_count: int,
         x += w + gap
 
 
+def render_fixed_chrome(slide, fixed_chrome: dict, slide_idx: int = 1, slide_count: int = 1, slide_w_in: float = 13.33):
+    """Render fixed-position chrome elements (nav-dots, progress-bar) extracted from the HTML DOM.
+    slide_idx: 1-based current slide index (used to compute active dot and progress bar width).
+    """
+    if not fixed_chrome:
+        return
+
+    # ── Nav dots (right-side vertical dots) ──────────────────────────────────
+    nav_dots = fixed_chrome.get('navDots', [])
+    if nav_dots:
+        # Detect active color from captured state (slide 1 has dot 0 active); fallback to yellow
+        active_color = None
+        border_color_rgb = (17, 17, 17)  # --border fallback
+        for dot in nav_dots:
+            bc = parse_color(dot.get('border', ''))
+            if bc:
+                border_color_rgb = bc
+            bg = parse_color(dot.get('bg', ''))
+            if bg and active_color is None:
+                active_color = bg
+        if active_color is None:
+            active_color = (255, 225, 77)  # --yellow fallback
+
+        active_idx = slide_idx - 1  # 0-based
+        for dot_i, dot in enumerate(nav_dots):
+            dot_shape = slide.shapes.add_shape(
+                MSO_SHAPE.RECTANGLE,
+                Inches(dot['x']), Inches(dot['y']),
+                Inches(max(dot['w'], 0.001)), Inches(max(dot['h'], 0.001))
+            )
+            if dot_i == active_idx:
+                dot_shape.fill.solid()
+                dot_shape.fill.fore_color.rgb = RGBColor(*active_color)
+            else:
+                dot_shape.fill.background()
+            dot_shape.line.color.rgb = RGBColor(*border_color_rgb)
+            dot_shape.line.width = Pt(1.5)
+
+    # ── Progress bar (thin line at top) ──────────────────────────────────────
+    # Always compute width from slide_idx/slide_count (HTML scroll state may not update in headless)
+    pb = fixed_chrome.get('progressBar')
+    pb_h = pb.get('h', 0.046) if pb else 0.046
+    pb_color_rgb = parse_color(pb.get('bg', '')) if pb else None
+    if not pb_color_rgb:
+        pb_color_rgb = (255, 60, 126)  # --pink fallback
+    pb_w = slide_idx / slide_count * slide_w_in
+    if pb_w > 0.01:
+        pb_shape = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE,
+            Inches(0), Inches(0),
+            Inches(pb_w), Inches(max(pb_h, 0.05))
+        )
+        pb_shape.fill.solid()
+        pb_shape.fill.fore_color.rgb = RGBColor(*pb_color_rgb)
+        suppress_line(pb_shape)
+
+
 def export_native(html_path, output_path=None, width=1440, height=900):
     html_path = Path(html_path).resolve()
     if not html_path.exists():
@@ -1249,6 +1571,12 @@ def export_native(html_path, output_path=None, width=1440, height=900):
                 r, g, b = data['background']
                 slide.background.fill.solid()
                 slide.background.fill.fore_color.rgb = RGBColor(r, g, b)
+
+            # Grid background overlay (CSS double linear-gradient grid pattern)
+            if data.get('gridBg'):
+                grid_info = data['gridBg']
+                add_grid_background(slide, max_w, slide_h_in,
+                                    grid_info['color'], grid_info['sizePx'])
 
             # Pre-pass: sync background shape height with adjacent text's naturalHeight,
             # and apply a PPTX font-metrics correction factor for multi-line elements.
@@ -1341,7 +1669,9 @@ def export_native(html_path, output_path=None, width=1440, height=900):
                     print(f"    警告: {e}")
 
             px_per_in = width / max_w
-            add_slide_chrome(slide, i, slide_count, max_w, slide_h_in, px_per_in)
+            if not data.get('hasOwnChrome'):
+                add_slide_chrome(slide, i, slide_count, max_w, slide_h_in, px_per_in)
+            render_fixed_chrome(slide, data.get('fixedChrome'), i, slide_count, max_w)
 
         browser.close()
 

@@ -15,6 +15,7 @@ v4 修复：
 
 import sys
 import argparse
+import io
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 import re
@@ -173,6 +174,14 @@ _EXTRACT_JS = r"""
 
     const slideW = slideRect.width;
     const slideH = slideRect.height;
+    let exportCounter = 0;
+
+    function safeInnerText(node) {
+        if (!node) return '';
+        if (typeof node.innerText === 'string') return node.innerText;
+        if (typeof node.textContent === 'string') return node.textContent;
+        return '';
+    }
 
     // Helper: resolve border-radius to px string.
     // getComputedStyle may return "50%" for border-radius:50% class rules — convert to px.
@@ -291,6 +300,7 @@ _EXTRACT_JS = r"""
     }
 
     const TEXT_TAGS = new Set(['h1','h2','h3','h4','h5','h6','p','li','span','a']);
+    const RASTER_TAGS = new Set(['img', 'svg', 'canvas']);
 
     // CJK width correction factor: PingFang SC / Source Han is ~15% wider than Chrome's
     // Latin fallback. Apply to bordered/backgrounded shapes that contain CJK text so they
@@ -335,10 +345,33 @@ _EXTRACT_JS = r"""
 
         const results = [];
 
+        function registerRaster(kind, source = '') {
+            const exportId = `kai-export-${slideIndex}-${++exportCounter}`;
+            el.setAttribute('data-kai-export-id', exportId);
+            return {
+                type: 'image',
+                tag: tag,
+                imageKind: kind,
+                exportId: exportId,
+                source: source,
+                bounds: bounds,
+                styles: {
+                    borderRadius: resolveBorderRadius(style, rect),
+                    objectFit: style.objectFit || ''
+                }
+            };
+        }
+
+        if (RASTER_TAGS.has(tag)) {
+            const source = tag === 'img' ? (el.currentSrc || el.src || '') : '';
+            results.push(registerRaster(tag, source));
+            return results;
+        }
+
         if (TEXT_TAGS.has(tag)) {
             // If element has visible background/border (e.g. .pill badge span), emit a shape first
             if (hasBg || hasBorder) {
-                const elText = el.innerText || '';
+                const elText = safeInnerText(el);
                 const elFontStr = style.fontFamily || '';
                 const elIsCondensed = /condensed|narrow|compressed/i.test(elFontStr);
                 // Condensed fonts (e.g. Barlow Condensed) get a 30% width boost to compensate for
@@ -364,7 +397,7 @@ _EXTRACT_JS = r"""
             // and rendered as <a:highlight> text run properties — no separate shape needed.
             // Text element - render as text box
             const {segments, gradientColors} = extractSegments(el);
-            const text = el.innerText.trim();
+            const text = safeInnerText(el).trim();
             if (text || segments.length > 0) {
                 const elFontStr2 = style.fontFamily || '';
                 const elIsCondensed2 = /condensed|narrow|compressed/i.test(elFontStr2);
@@ -437,7 +470,7 @@ _EXTRACT_JS = r"""
                             width: cellRect.width / PX_PER_IN,
                             height: cellRect.height / PX_PER_IN
                         },
-                        text: cell.innerText.trim(),
+                        text: safeInnerText(cell).trim(),
                         segments: segments,
                         isHeader: isHeader,
                         styles: {
@@ -464,21 +497,30 @@ _EXTRACT_JS = r"""
         }
 
         if (tag === 'div' || tag === 'section' || tag === 'article' || tag === 'ul' || tag === 'ol') {
+            const bgImage = style.backgroundImage || 'none';
+            const hasGradientBg = bgImage !== 'none' && bgImage.includes('gradient');
+            const hasUrlBg = bgImage !== 'none' && bgImage.includes('url(');
+            const totalText = safeInnerText(el).trim();
+
+            if (hasUrlBg && !totalText) {
+                results.push(registerRaster('background-image', bgImage));
+                return results;
+            }
+
             // Filter out decorative elements with highly transparent backgrounds and no text
             // (e.g. ambient orb/cloud divs in blue-sky style: rgba(x,x,x,0.3) blobs)
             const alphaMatch = (bgColor || '').match(/rgba\([^)]+,\s*([\d.]+)\s*\)/);
             const bgAlpha = alphaMatch ? parseFloat(alphaMatch[1]) : 1.0;
-            if (bgAlpha < 0.5 && !el.innerText.trim() && bounds.width > 1.5 && bounds.height > 1.5) return [];
+            if (bgAlpha < 0.5 && !totalText && bounds.width > 1.5 && bounds.height > 1.5) return [];
 
             // Detect "leaf-text container": a div whose entire visible content is text
             // Case A: no child elements at all — e.g. <div class="chapter-num">01</div>
             // Case B: only inline child elements + sibling text nodes — e.g. <div class="co"><strong>Note:</strong> more text</div>
             const INLINE_TAGS = new Set(['STRONG','EM','B','I','SPAN','A','MARK','CODE','SMALL','KBD','VAR','ABBR','TIME','SUP','SUB','BR']);
-            const totalText = el.innerText.trim();
             const allChildInline = el.children.length > 0 &&
                 Array.from(el.children).every(c => INLINE_TAGS.has(c.tagName));
             const childrenTextLen = Array.from(el.children)
-                .map(c => c.innerText.trim()).join('').replace(/\s+/g, '').length;
+                .map(c => safeInnerText(c).trim()).join('').replace(/\s+/g, '').length;
             const totalTextLen = totalText.replace(/\s+/g, '').length;
             // "has direct text" if total text is notably more than what children account for
             const hasDirectText = totalText && (
@@ -536,10 +578,8 @@ _EXTRACT_JS = r"""
             }
 
             // Standard container: maybe has background shape, then recurse
-            const bgImage = style.backgroundImage || 'none';
-            const hasGradientBg = bgImage !== 'none' && bgImage.includes('gradient');
             if (hasBg || hasBorder || hasGradientBg) {
-                const containerText = el.innerText || '';
+                const containerText = safeInnerText(el);
                 // Condensed fonts: check self AND direct children (parent div may not inherit
                 // the font-family set on a child .headline element).
                 const containerFontStr = style.fontFamily || '';
@@ -620,6 +660,12 @@ _EXTRACT_JS = r"""
         }
     }
 
+    const exportProgressSetting =
+        (document.body && document.body.dataset.exportProgress) ||
+        document.documentElement.dataset.exportProgress ||
+        'true';
+    const shouldExportChrome = !['false', '0', 'off', 'no'].includes(String(exportProgressSetting).toLowerCase());
+
     // Detect if the template already provides its own navigation chrome
     // (.nav-dots, .slide-counter, etc.) — if so, skip PPTX chrome injection
     const hasOwnChrome = !!(document.querySelector('.nav-dots') ||
@@ -632,7 +678,7 @@ _EXTRACT_JS = r"""
     const progressBarEl = document.querySelector('.progress-bar');
     if (navDotsEl || progressBarEl) {
         fixedChrome = {};
-        if (navDotsEl) {
+        if (navDotsEl && shouldExportChrome) {
             const buttons = navDotsEl.querySelectorAll('button');
             const navRect = navDotsEl.getBoundingClientRect();
             const dots = [];
@@ -651,7 +697,7 @@ _EXTRACT_JS = r"""
             });
             fixedChrome.navDots = dots;
         }
-        if (progressBarEl) {
+        if (progressBarEl && shouldExportChrome) {
             const r = progressBarEl.getBoundingClientRect();
             const s = window.getComputedStyle(progressBarEl);
             if (r.width > 2) {  // only capture if visible (width > 0)
@@ -704,11 +750,15 @@ def extract_slide_elements(page: Page, slide_index: int) -> Dict[str, Any]:
 _FONT_MAP = {
     'Clash Display': ('Calibri Light', 'Microsoft YaHei'),
     'Satoshi':       ('Calibri',       'Microsoft YaHei'),
-    'PingFang SC':   ('Calibri',       'PingFang SC'),
-    'system-ui':     ('Calibri',       'PingFang SC'),
-    '-apple-system': ('Calibri',       'PingFang SC'),
+    'Microsoft YaHei': ('Microsoft YaHei', 'Microsoft YaHei'),
+    '微软雅黑':          ('Microsoft YaHei', 'Microsoft YaHei'),
+    'PingFang SC':      ('PingFang SC',     'PingFang SC'),
+    'Noto Sans CJK SC': ('Noto Sans CJK SC','Noto Sans CJK SC'),
+    'Source Han Sans':  ('Source Han Sans', 'Source Han Sans'),
+    'system-ui':        ('Microsoft YaHei', 'Microsoft YaHei'),
+    '-apple-system':    ('PingFang SC',     'PingFang SC'),
 }
-_DEFAULT_FONTS = ('Calibri', 'PingFang SC')
+_DEFAULT_FONTS = ('Microsoft YaHei', 'Microsoft YaHei')
 
 
 def map_font(css_font_family: str):
@@ -1042,6 +1092,67 @@ def export_shape_background(slide, elem, slide_bg=(255, 255, 255)):
                 run.text = ''
 
     return shape
+
+
+def export_raster_element(page: Page, slide, elem: Dict[str, Any]):
+    """Render DOM-backed raster elements (<img>, <svg>, url() backgrounds) as PPT pictures."""
+    export_id = elem.get('exportId')
+    if not export_id:
+        raise ValueError("Raster element missing exportId")
+
+    locator = page.locator(f'[data-kai-export-id="{export_id}"]').first
+    if locator.count() == 0:
+        raise ValueError(f"Raster element not found: {export_id}")
+
+    # Isolate the target element before screenshotting. For full-slide images, Playwright's
+    # locator.screenshot() captures the final painted pixels inside the element's bounding box,
+    # which includes overlapping sibling text. Hiding non-target nodes avoids duplicating text
+    # when the PPT also gets native text boxes.
+    page.evaluate(
+        """
+        (targetId) => {
+            const target = document.querySelector(`[data-kai-export-id="${targetId}"]`);
+            if (!target) return false;
+            const slide = target.closest('.slide');
+            if (!slide) return false;
+            const nodes = slide.querySelectorAll('*');
+            nodes.forEach((node) => {
+                if (node === target || target.contains(node) || node.contains(target)) return;
+                if (node.dataset.kaiPrevVisibility !== undefined) return;
+                node.dataset.kaiPrevVisibility = node.style.visibility || '';
+                node.style.visibility = 'hidden';
+            });
+            return true;
+        }
+        """,
+        export_id,
+    )
+    try:
+        png_bytes = locator.screenshot(type="png", animations="disabled", omit_background=True)
+        b = elem['bounds']
+        slide.shapes.add_picture(
+            io.BytesIO(png_bytes),
+            Inches(b['x']), Inches(b['y']),
+            Inches(b['width']), Inches(b['height'])
+        )
+    finally:
+        page.evaluate(
+            """
+            (targetId) => {
+                const target = document.querySelector(`[data-kai-export-id="${targetId}"]`);
+                if (!target) return false;
+                const slide = target.closest('.slide');
+                if (!slide) return false;
+                const nodes = slide.querySelectorAll('[data-kai-prev-visibility]');
+                nodes.forEach((node) => {
+                    node.style.visibility = node.dataset.kaiPrevVisibility;
+                    delete node.dataset.kaiPrevVisibility;
+                });
+                return true;
+            }
+            """,
+            export_id,
+        )
 
 
 def interpolate_color(c1, c2, t):
@@ -1498,20 +1609,21 @@ def render_fixed_chrome(slide, fixed_chrome: dict, slide_idx: int = 1, slide_cou
     # ── Progress bar (thin line at top) ──────────────────────────────────────
     # Always compute width from slide_idx/slide_count (HTML scroll state may not update in headless)
     pb = fixed_chrome.get('progressBar')
-    pb_h = pb.get('h', 0.046) if pb else 0.046
-    pb_color_rgb = parse_color(pb.get('bg', '')) if pb else None
-    if not pb_color_rgb:
-        pb_color_rgb = (255, 60, 126)  # --pink fallback
-    pb_w = slide_idx / slide_count * slide_w_in
-    if pb_w > 0.01:
-        pb_shape = slide.shapes.add_shape(
-            MSO_SHAPE.RECTANGLE,
-            Inches(0), Inches(0),
-            Inches(pb_w), Inches(max(pb_h, 0.05))
-        )
-        pb_shape.fill.solid()
-        pb_shape.fill.fore_color.rgb = RGBColor(*pb_color_rgb)
-        suppress_line(pb_shape)
+    if pb:
+        pb_h = pb.get('h', 0.046)
+        pb_color_rgb = parse_color(pb.get('bg', ''))
+        if not pb_color_rgb:
+            pb_color_rgb = (255, 60, 126)  # --pink fallback
+        pb_w = slide_idx / slide_count * slide_w_in
+        if pb_w > 0.01:
+            pb_shape = slide.shapes.add_shape(
+                MSO_SHAPE.RECTANGLE,
+                Inches(0), Inches(0),
+                Inches(pb_w), Inches(max(pb_h, 0.05))
+            )
+            pb_shape.fill.solid()
+            pb_shape.fill.fore_color.rgb = RGBColor(*pb_color_rgb)
+            suppress_line(pb_shape)
 
 
 def export_native(html_path, output_path=None, width=1440, height=900):
@@ -1661,6 +1773,8 @@ def export_native(html_path, output_path=None, width=1440, height=900):
 
                     if elem_type == 'shape':
                         export_shape_background(slide, elem, slide_bg=data['background'] or (255, 255, 255))
+                    elif elem_type == 'image':
+                        export_raster_element(page, slide, elem)
                     elif elem_type == 'table':
                         export_table_element(slide, elem)
                     else:
@@ -1676,7 +1790,7 @@ def export_native(html_path, output_path=None, width=1440, height=900):
         browser.close()
 
     prs.save(str(output_path))
-    print(f"✓ 已保存: {output_path}  ({slide_count} 张幻灯片)")
+    print(f"Saved: {output_path}  ({slide_count} 张幻灯片)")
     return output_path
 
 

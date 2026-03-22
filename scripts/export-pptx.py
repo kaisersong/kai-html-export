@@ -220,7 +220,7 @@ def export(html_path, output_path=None, width=1440, height=900, scale=2):
 
         print(f"\nAssembling PPTX...")
         assemble_pptx(screenshots, output_path, width, height)
-        print(f"✓ Saved: {output_path}  ({len(screenshots)} slides)")
+        print(f"Saved: {output_path}  ({len(screenshots)} slides)")
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 

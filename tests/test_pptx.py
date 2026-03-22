@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.util import Inches
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -188,3 +189,48 @@ class TestNativeMode:
         count_native = len(Presentation(str(out_native)).slides)
         assert count_image == count_native, \
             f"Slide count mismatch: image={count_image}, native={count_native}"
+
+    def test_native_mode_exports_img_svg_and_background_images(self, tmp_path):
+        """Native mode should keep raster template elements instead of dropping or crashing on them."""
+        out = tmp_path / "raster-elements.pptx"
+        r = run_export([str(FIXTURES / "native_raster_elements.html"), str(out), "--mode", "native"])
+        assert r.returncode == 0, f"Script failed:\nSTDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}"
+
+        prs = Presentation(str(out))
+        assert len(prs.slides) == 3
+
+        picture_counts = [
+            sum(1 for shape in slide.shapes if shape.shape_type == MSO_SHAPE_TYPE.PICTURE)
+            for slide in prs.slides
+        ]
+        assert picture_counts[0] >= 1, "Expected native mode to export <img> as a picture"
+        assert picture_counts[1] >= 1, "Expected native mode to export inline <svg> as a picture"
+        assert picture_counts[2] >= 1, "Expected native mode to export background-image:url(...) containers as pictures"
+
+    def test_native_mode_respects_export_progress_opt_out(self, tmp_path):
+        """data-export-progress=false should suppress PPT progress-bar and nav-dot rendering."""
+        out = tmp_path / "progress-opt-out.pptx"
+        r = run_export([str(FIXTURES / "native_progress_opt_out.html"), str(out), "--mode", "native"])
+        assert r.returncode == 0, f"Script failed:\nSTDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}"
+
+        prs = Presentation(str(out))
+        assert len(prs.slides) == 2
+
+        for slide in prs.slides:
+            top_thin_rects = [
+                shape for shape in slide.shapes
+                if shape.shape_type == MSO_SHAPE_TYPE.AUTO_SHAPE
+                and getattr(shape, "top", 0) == 0
+                and getattr(shape, "height", 0) < Inches(0.08)
+                and getattr(shape, "width", 0) > Inches(1.0)
+            ]
+            assert not top_thin_rects, "Expected no PPT progress bar when data-export-progress=false"
+
+            nav_dot_shapes = [
+                shape for shape in slide.shapes
+                if shape.shape_type == MSO_SHAPE_TYPE.AUTO_SHAPE
+                and getattr(shape, "left", 0) > Inches(12.5)
+                and Inches(0.05) <= getattr(shape, "width", 0) <= Inches(0.3)
+                and Inches(0.05) <= getattr(shape, "height", 0) <= Inches(0.3)
+            ]
+            assert not nav_dot_shapes, "Expected no PPT nav dots when data-export-progress=false"

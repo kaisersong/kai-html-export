@@ -6,7 +6,7 @@ English | [简体中文](README.zh-CN.md)
 
 A Claude Code skill that converts HTML files into portable formats using a headless browser. No Node.js required — uses your existing system Chrome.
 
-**v1.1.3** — Native mode: inline background shapes, condensed font detection, CJK width compensation, fixed-chrome nav dots.
+**v1.1.4** — Native mode now exports template-linked raster content (`<img>`, SVG, `canvas`, CSS `background-image`), hardens undefined element handling, prevents duplicate text overlays on full-slide image layouts, maps CJK text to Microsoft YaHei instead of Calibri where appropriate, and respects `data-export-progress="false"` to hide both the top progress bar and right-side nav dots.
 
 ---
 
@@ -88,9 +88,10 @@ Reconstructs each slide as real PowerPoint shapes, text boxes, and tables. Text 
 | Inline background highlights | ✅ `<span style="background:…">` → colored shape behind text |
 | Solid-color shapes (div with background) | ✅ rectangles with fill |
 | Tables | ✅ editable cells with borders |
-| Images | ✅ native insertion |
+| Images (`<img>`, `canvas`, CSS `background-image`) | ✅ inserted as raster layers |
+| SVG graphics | ✅ rasterized to PNG and embedded |
 | Grid / dot / noise backgrounds | ✅ auto-detected and rendered |
-| `position:fixed` nav dots + progress bars | ✅ per-slide state computed from slide index |
+| `position:fixed` nav dots + progress bars | ✅ per-slide state computed from slide index; set `data-export-progress="false"` on `<body>` to suppress both |
 
 #### What native mode approximates or skips
 
@@ -99,7 +100,7 @@ Reconstructs each slide as real PowerPoint shapes, text boxes, and tables. Text 
 | CSS gradients | → solid color (average of gradient stops) |
 | Box shadows | → omitted |
 | Custom web fonts (e.g. Barlow, Inter) | → nearest system font |
-| SVG graphics | → rasterized to PNG |
+| Unsupported DOM / CSS edge cases | → skipped safely instead of crashing the export |
 
 #### CJK (Chinese / Japanese / Korean) compensation
 
@@ -108,6 +109,7 @@ PingFang SC and other CJK fonts render ~15% wider and ~30% taller in Keynote/Pow
 - Text boxes with CJK content are widened by ×1.15
 - Condensed font containers (Barlow Condensed, etc.) are widened by ×1.30
 - Width expansion only applies to boxes narrower than 3 inches (prevents wide containers from overflowing)
+- CJK system font mapping prefers Microsoft YaHei on Windows so exported PPTs do not fall back to Calibri
 - Inline background shapes use PPTX coordinate system (not Chrome coordinates) to stay aligned with text
 
 ---

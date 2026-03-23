@@ -6,7 +6,7 @@
 
 一个 Claude Code 技能，通过无头浏览器将 HTML 文件转换为可分享的格式。无需 Node.js，使用你已安装的系统 Chrome。
 
-**v1.1.5** — 修复三个 native 模式图片放置 bug：（1）透明底色图片不再被填白；（2）`object-fit: cover` 的 hero 图片改用 PIL 预裁剪到精确可见像素区域，彻底消除 srcRect 在不同 PPT 查看器中渲染不一致的位置偏移；（3）默认导出 viewport 从 1440×900（8:5）改为 1440×810（16:9），生成标准宽屏幻灯片尺寸（13.33×7.5 英寸），使 cover 裁剪结果与用户在 16:9 显示器上看到的 HTML 一致。非 cover 图片（contain、fill）改回 Playwright 截图路径，确保 CSS opacity 和合成效果被正确捕获。
+**v1.1.6** — 借鉴 Anthropic PPTX skill 的四项改进：（1）导出后自动生成预览网格 `{name}-preview.png`，包含首页、约 1/3、约 2/3 和末页缩略图，无需手动打开 Keynote 检查；（2）保存后执行 PPTX 结构验证，幻灯片数量不符或页面不可读时打印 `⚠` 警告；（3）native 模式浏览器启动适配沙箱环境，依次尝试 Chrome → Edge → Chromium → Playwright 内置 Chromium，Linux/Docker/CI 环境自动添加 `--no-sandbox`；（4）SKILL.md 新增 QA 流程说明。
 
 ---
 

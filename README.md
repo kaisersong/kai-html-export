@@ -6,7 +6,7 @@ English | [简体中文](README.zh-CN.md)
 
 A Claude Code skill that converts HTML files into portable formats using a headless browser. No Node.js required — uses your existing system Chrome.
 
-**v1.1.5** — Fixes three native-mode image placement bugs: (1) transparent-background images no longer get a white fill; (2) `object-fit: cover` hero images are now PIL-pre-cropped to the exact visible pixel region instead of using PPTX srcRect, eliminating viewer-side crop inconsistencies; (3) the default export viewport is now 1440×810 (16:9), matching standard widescreen slide dimensions (13.33×7.5 in) and making `object-fit: cover` crops align with the browser view on 16:9 displays. Non-cover images (`contain`, `fill`) fall back to the Playwright screenshot path so CSS opacity and compositing are captured correctly.
+**v1.1.6** — Four improvements borrowed from the Anthropic PPTX skill: (1) post-export preview grid (`{name}-preview.png`) with thumbnails of slides 1, ~1/3, ~2/3, and last — no manual Keynote inspection needed; (2) structural PPTX validation after save — slide count mismatch and unreadable slides are reported as `⚠` warnings; (3) sandbox-safe browser launch for native mode — tries Chrome → Edge → Chromium → Playwright bundled Chromium, adds `--no-sandbox` automatically on Linux/Docker/CI; (4) QA process documented in SKILL.md.
 
 ---
 

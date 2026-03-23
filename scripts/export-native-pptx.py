@@ -1727,6 +1727,120 @@ def render_fixed_chrome(slide, fixed_chrome: dict, slide_idx: int = 1, slide_cou
             suppress_line(pb_shape)
 
 
+def _find_and_launch_browser(playwright):
+    """
+    Try system-installed browsers first (no download needed), fall back to
+    Playwright's bundled Chromium as a last resort.
+
+    Linux/Docker/CI: adds --no-sandbox because root/container environments
+    block Chrome's kernel sandbox by default.
+    """
+    import platform
+    is_linux = platform.system() == 'Linux'
+    extra_args = ['--no-sandbox', '--disable-setuid-sandbox'] if is_linux else []
+
+    for channel in ['chrome', 'msedge', 'chromium']:
+        try:
+            browser = playwright.chromium.launch(channel=channel, headless=True, args=extra_args)
+            print(f"  Using browser: {channel}")
+            return browser
+        except Exception:
+            continue
+
+    # Last resort: Playwright's own Chromium (requires: playwright install chromium)
+    try:
+        browser = playwright.chromium.launch(headless=True, args=extra_args)
+        print("  Using browser: playwright-chromium")
+        return browser
+    except Exception as e:
+        print("\nNo browser found.")
+        if is_linux:
+            print("  Linux options (pick one):")
+            print("    apt install chromium-browser      # system package")
+            print("    playwright install chromium        # self-contained")
+        else:
+            print("  Install Google Chrome: https://www.google.com/chrome/")
+            print("  Or run: playwright install chromium")
+        raise SystemExit(1) from e
+
+
+def _screenshot_slide(page, slide_index: int, width: int, height: int) -> Optional[bytes]:
+    """Screenshot one slide via scrollIntoView + getBoundingClientRect clip."""
+    try:
+        page.evaluate(f"""
+            () => {{
+                const s = document.querySelectorAll('.slide')[{slide_index}];
+                if (s) s.scrollIntoView({{behavior: 'instant', block: 'start'}});
+            }}
+        """)
+        page.wait_for_timeout(80)
+        box = page.evaluate(f"""
+            () => {{
+                const r = document.querySelectorAll('.slide')[{slide_index}].getBoundingClientRect();
+                return {{x: r.left, y: r.top, w: r.width, h: r.height}};
+            }}
+        """)
+        if not box or box['w'] <= 0:
+            return None
+        x, y, w, h = box['x'], box['y'], box['w'], box['h']
+        clip = {'x': max(0.0, x), 'y': max(0.0, y),
+                'width': min(w, width - max(0.0, x)),
+                'height': min(h, height - max(0.0, y))}
+        if clip['width'] < 10 or clip['height'] < 10:
+            return None
+        return page.screenshot(type='png', clip=clip)
+    except Exception:
+        return None
+
+
+def _save_preview_grid(screenshots: List[Tuple[int, bytes]], output_path: Path) -> Optional[Path]:
+    """Assemble slide thumbnails into a labeled grid PNG."""
+    try:
+        from PIL import Image, ImageDraw
+        THUMB_W, LABEL_H, PAD = 320, 22, 4
+        thumbs = []
+        for label, png in screenshots:
+            img = Image.open(io.BytesIO(png)).convert('RGB')
+            ratio = img.height / img.width
+            img = img.resize((THUMB_W, int(THUMB_W * ratio)), Image.LANCZOS)
+            thumbs.append((label, img))
+        if not thumbs:
+            return None
+        n = len(thumbs)
+        tw, th = thumbs[0][1].size
+        grid = Image.new('RGB', (n * THUMB_W + (n - 1) * PAD, th + LABEL_H), (32, 32, 32))
+        draw = ImageDraw.Draw(grid)
+        for j, (label, thumb) in enumerate(thumbs):
+            x = j * (THUMB_W + PAD)
+            grid.paste(thumb, (x, 0))
+            draw.text((x + THUMB_W // 2, th + 3), f"Slide {label}",
+                      fill=(200, 200, 200), anchor='mt')
+        preview_path = output_path.with_name(output_path.stem + '-preview.png')
+        grid.save(str(preview_path))
+        return preview_path
+    except Exception:
+        return None
+
+
+def _validate_pptx(pptx_path: Path, expected_slides: int) -> List[str]:
+    """Quick structural validation after save. Returns list of warning strings."""
+    issues = []
+    try:
+        from pptx import Presentation as _Prs
+        prs2 = _Prs(str(pptx_path))
+        actual = len(prs2.slides)
+        if actual != expected_slides:
+            issues.append(f"slide count mismatch: expected {expected_slides}, got {actual}")
+        for i, slide in enumerate(prs2.slides):
+            try:
+                _ = len(slide.shapes)
+            except Exception as e:
+                issues.append(f"slide {i+1} unreadable: {e}")
+    except Exception as e:
+        issues.append(f"failed to open PPTX: {e}")
+    return issues
+
+
 def export_native(html_path, output_path=None, width=1440, height=810):
     html_path = Path(html_path).resolve()
     if not html_path.exists():
@@ -1737,7 +1851,7 @@ def export_native(html_path, output_path=None, width=1440, height=810):
     print(f"导出（native v5）: {html_path.name}")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(channel='chrome', headless=True)
+        browser = _find_and_launch_browser(p)
         page = browser.new_page(viewport={"width": width, "height": height})
         page.goto(f"file://{html_path}", wait_until="networkidle")
         page.wait_for_timeout(500)
@@ -1751,6 +1865,9 @@ def export_native(html_path, output_path=None, width=1440, height=810):
         print(f"找到 {slide_count} 张幻灯片")
         inject_visible(page)
         page.wait_for_timeout(200)
+
+        _preview_indices = sorted({0, slide_count // 3, 2 * slide_count // 3, slide_count - 1})
+        preview_screenshots: List[Tuple[int, bytes]] = []
 
         prs = Presentation()
         first = extract_slide_elements(page, 0)
@@ -1888,10 +2005,26 @@ def export_native(html_path, output_path=None, width=1440, height=810):
                 add_slide_chrome(slide, i, slide_count, max_w, slide_h_in, px_per_in)
             render_fixed_chrome(slide, data.get('fixedChrome'), i, slide_count, max_w)
 
+            # Collect thumbnail for preview grid
+            if i in _preview_indices:
+                ss = _screenshot_slide(page, i, width, height)
+                if ss:
+                    preview_screenshots.append((i + 1, ss))
+
         browser.close()
 
     prs.save(str(output_path))
     print(f"Saved: {output_path}  ({slide_count} 张幻灯片)")
+
+    # Structural validation
+    for issue in _validate_pptx(output_path, slide_count):
+        print(f"  ⚠ {issue}")
+
+    # Preview grid
+    preview_path = _save_preview_grid(preview_screenshots, output_path)
+    if preview_path:
+        print(f"Preview: {preview_path}")
+
     return output_path
 
 

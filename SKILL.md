@@ -7,7 +7,7 @@ description: >-
   "export to pptx", "screenshot html", "convert html to powerpoint",
   "导出为ppt", "导出ppt", "生成ppt", "转成ppt", "导出幻灯片",
   "html转ppt", "保存为ppt", "可编辑的ppt", "native模式", "导出为可编辑".
-version: 1.1.5
+version: 1.1.6
 metadata:
   openclaw:
     emoji: "📤"
@@ -107,6 +107,15 @@ python3 <skill-path>/scripts/screenshot.py <file.html> [output.png] [--width 144
 | `python-pptx` | Assemble screenshots into PPTX | `pip install python-pptx` |
 
 No browser download needed if Chrome, Edge, or Brave is already installed.
+
+## QA Process
+
+After every native-mode export, assume something looks wrong until proven otherwise:
+
+1. **Preview grid** — the export automatically saves `{name}-preview.png` with thumbnails of slide 1, ~1/3, ~2/3, and last. Open it immediately: `open {name}-preview.png`
+2. **Structural check** — if slide count mismatches or any slide is unreadable, the script prints `⚠` warnings
+3. **Open PPTX** — for image issues or layout problems, open the PPTX in Keynote/PowerPoint to verify the render
+4. **Re-export** — if visual quality is wrong, diagnose the root cause in the HTML before re-running
 
 ## Works with any HTML
 

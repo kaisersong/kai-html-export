@@ -6,7 +6,7 @@
 
 一个 Claude Code 技能，通过无头浏览器将 HTML 文件转换为可分享的格式。无需 Node.js，使用你已安装的系统 Chrome。
 
-**v1.1.4** — Native 模式现在会导出模板引用的光栅内容（`<img>`、SVG、`canvas`、CSS `background-image`），补上空值保护避免脚本因 undefined 崩溃，修复整页图片布局下的文字重复叠加，优先把中日韩文字映射到微软雅黑而不是 Calibri，并支持通过 `data-export-progress="false"` 同时隐藏顶部进度条和右侧导航点。
+**v1.1.5** — 修复三个 native 模式图片放置 bug：（1）透明底色图片不再被填白；（2）`object-fit: cover` 的 hero 图片改用 PIL 预裁剪到精确可见像素区域，彻底消除 srcRect 在不同 PPT 查看器中渲染不一致的位置偏移；（3）默认导出 viewport 从 1440×900（8:5）改为 1440×810（16:9），生成标准宽屏幻灯片尺寸（13.33×7.5 英寸），使 cover 裁剪结果与用户在 16:9 显示器上看到的 HTML 一致。非 cover 图片（contain、fill）改回 Playwright 截图路径，确保 CSS opacity 和合成效果被正确捕获。
 
 ---
 

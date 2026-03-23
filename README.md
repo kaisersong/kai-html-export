@@ -6,7 +6,7 @@ English | [简体中文](README.zh-CN.md)
 
 A Claude Code skill that converts HTML files into portable formats using a headless browser. No Node.js required — uses your existing system Chrome.
 
-**v1.1.4** — Native mode now exports template-linked raster content (`<img>`, SVG, `canvas`, CSS `background-image`), hardens undefined element handling, prevents duplicate text overlays on full-slide image layouts, maps CJK text to Microsoft YaHei instead of Calibri where appropriate, and respects `data-export-progress="false"` to hide both the top progress bar and right-side nav dots.
+**v1.1.5** — Fixes three native-mode image placement bugs: (1) transparent-background images no longer get a white fill; (2) `object-fit: cover` hero images are now PIL-pre-cropped to the exact visible pixel region instead of using PPTX srcRect, eliminating viewer-side crop inconsistencies; (3) the default export viewport is now 1440×810 (16:9), matching standard widescreen slide dimensions (13.33×7.5 in) and making `object-fit: cover` crops align with the browser view on 16:9 displays. Non-cover images (`contain`, `fill`) fall back to the Playwright screenshot path so CSS opacity and compositing are captured correctly.
 
 ---
 

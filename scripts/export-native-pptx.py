@@ -1094,11 +1094,94 @@ def export_shape_background(slide, elem, slide_bg=(255, 255, 255)):
     return shape
 
 
+def _download_img_direct(source: str, b: Dict, object_fit: str, pptx_slide) -> bool:
+    """
+    For <img> elements with http(s)/file sources and object-fit: cover: download the
+    original image, PIL-crop to the exact visible pixel region, and embed the cropped
+    image. Only handles cover — other fits fall back to Playwright screenshot so that
+    CSS opacity and rendering are captured correctly.
+    Returns True on success, False to fall back to screenshot.
+    """
+    # Only handle cover — contain/fill/none should use the Playwright screenshot path
+    # so that CSS opacity and compositing are correctly captured.
+    if object_fit != 'cover':
+        return False
+
+    try:
+        import urllib.request
+        from PIL import Image as _PILImg
+        import ssl
+        if source.startswith('file://'):
+            img_path = source[len('file://'):]
+            with open(img_path, 'rb') as f:
+                img_bytes = f.read()
+        else:
+            req = urllib.request.Request(source, headers={'User-Agent': 'Mozilla/5.0'})
+            try:
+                import certifi
+                _ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+            except ImportError:
+                _ssl_ctx = ssl._create_unverified_context()
+            with urllib.request.urlopen(req, context=_ssl_ctx, timeout=15) as resp:
+                img_bytes = resp.read()
+
+        pil_img = _PILImg.open(io.BytesIO(img_bytes))
+        w_img, h_img = pil_img.size
+        if w_img < 1 or h_img < 1:
+            return False
+
+        w_box = b['width']   # inches
+        h_box = b['height']  # inches
+        aspect_box = w_box / h_box
+        aspect_img = w_img / h_img
+
+        # Compute crop fractions for object-fit: cover
+        crop_l = crop_r = crop_t = crop_b = 0.0
+        if aspect_box > aspect_img:
+            # Fill width, crop top/bottom symmetrically
+            crop_t = crop_b = 0.5 * (1.0 - aspect_img / aspect_box)
+        else:
+            # Fill height, crop left/right symmetrically
+            crop_l = crop_r = 0.5 * (1.0 - aspect_box / aspect_img)
+
+        # PIL-crop to the exact visible pixel region instead of using PPTX srcRect.
+        # PPTX srcRect is rendered inconsistently across Keynote/LibreOffice/PowerPoint,
+        # causing visible position shifts. Pre-cropping the image is viewer-agnostic.
+        x0 = int(round(crop_l * w_img))
+        x1 = int(round((1.0 - crop_r) * w_img))
+        y0 = int(round(crop_t * h_img))
+        y1 = int(round((1.0 - crop_b) * h_img))
+        cropped = pil_img.crop((x0, y0, x1, y1))
+        out = io.BytesIO()
+        cropped.save(out, format='PNG')
+        out.seek(0)
+
+        pptx_slide.shapes.add_picture(
+            out,
+            Inches(b['x']), Inches(b['y']),
+            Inches(w_box), Inches(h_box)
+        )
+        return True
+    except Exception:
+        return False
+
+
 def export_raster_element(page: Page, slide, elem: Dict[str, Any]):
     """Render DOM-backed raster elements (<img>, <svg>, url() backgrounds) as PPT pictures."""
     export_id = elem.get('exportId')
     if not export_id:
         raise ValueError("Raster element missing exportId")
+
+    # For <img> elements with a resolvable URL: download the original and use PPTX-native
+    # crop to simulate object-fit. This avoids Playwright screenshot cropping differences
+    # and preserves PNG transparency without background bleed-through.
+    if elem.get('tag') == 'img':
+        source = elem.get('source', '')
+        if source.startswith(('http://', 'https://', 'file://')):
+            b = elem['bounds']
+            object_fit = elem.get('styles', {}).get('objectFit', 'fill')
+            if _download_img_direct(source, b, object_fit, slide):
+                return
 
     locator = page.locator(f'[data-kai-export-id="{export_id}"]').first
     if locator.count() == 0:
@@ -1115,6 +1198,7 @@ def export_raster_element(page: Page, slide, elem: Dict[str, Any]):
             if (!target) return false;
             const slide = target.closest('.slide');
             if (!slide) return false;
+            // Hide all sibling nodes so only the target is rendered.
             const nodes = slide.querySelectorAll('*');
             nodes.forEach((node) => {
                 if (node === target || target.contains(node) || node.contains(target)) return;
@@ -1122,6 +1206,17 @@ def export_raster_element(page: Page, slide, elem: Dict[str, Any]):
                 node.dataset.kaiPrevVisibility = node.style.visibility || '';
                 node.style.visibility = 'hidden';
             });
+            // Make ancestor backgrounds transparent so PNG transparency is preserved.
+            // omit_background=True only removes the browser's default white; CSS
+            // background-color on ancestor elements (e.g. .slide-title { background: white })
+            // still bleeds through transparent areas of the <img>/<svg>/canvas.
+            let anc = target.parentElement;
+            while (anc && anc !== document.documentElement) {
+                anc.dataset.kaiPrevCssText = anc.style.cssText;
+                anc.style.setProperty('background-color', 'transparent', 'important');
+                anc.style.setProperty('background-image', 'none', 'important');
+                anc = anc.parentElement;
+            }
             return true;
         }
         """,
@@ -1143,10 +1238,16 @@ def export_raster_element(page: Page, slide, elem: Dict[str, Any]):
                 if (!target) return false;
                 const slide = target.closest('.slide');
                 if (!slide) return false;
+                // Restore sibling visibility.
                 const nodes = slide.querySelectorAll('[data-kai-prev-visibility]');
                 nodes.forEach((node) => {
                     node.style.visibility = node.dataset.kaiPrevVisibility;
                     delete node.dataset.kaiPrevVisibility;
+                });
+                // Restore ancestor backgrounds.
+                document.querySelectorAll('[data-kai-prev-css-text]').forEach((a) => {
+                    a.style.cssText = a.dataset.kaiPrevCssText;
+                    delete a.dataset.kaiPrevCssText;
                 });
                 return true;
             }
@@ -1626,7 +1727,7 @@ def render_fixed_chrome(slide, fixed_chrome: dict, slide_idx: int = 1, slide_cou
             suppress_line(pb_shape)
 
 
-def export_native(html_path, output_path=None, width=1440, height=900):
+def export_native(html_path, output_path=None, width=1440, height=810):
     html_path = Path(html_path).resolve()
     if not html_path.exists():
         print(f"Error: {html_path}")
@@ -1799,7 +1900,7 @@ def main():
     parser.add_argument("html")
     parser.add_argument("output", nargs="?")
     parser.add_argument("--width", type=int, default=1440)
-    parser.add_argument("--height", type=int, default=900)
+    parser.add_argument("--height", type=int, default=810)
     args = parser.parse_args()
     export_native(args.html, args.output, args.width, args.height)
 

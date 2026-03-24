@@ -7,7 +7,7 @@ description: >-
   "export to pptx", "screenshot html", "convert html to powerpoint",
   "导出为ppt", "导出ppt", "生成ppt", "转成ppt", "导出幻灯片",
   "html转ppt", "保存为ppt", "可编辑的ppt", "native模式", "导出为可编辑".
-version: 1.1.6
+version: 1.1.7
 metadata:
   openclaw:
     emoji: "📤"

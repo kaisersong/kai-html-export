@@ -6,7 +6,7 @@ English | [简体中文](README.zh-CN.md)
 
 A Claude Code skill that converts HTML files into portable formats using a headless browser. No Node.js required — uses your existing system Chrome.
 
-**v1.1.6** — Four improvements borrowed from the Anthropic PPTX skill: (1) post-export preview grid (`{name}-preview.png`) with thumbnails of slides 1, ~1/3, ~2/3, and last — no manual Keynote inspection needed; (2) structural PPTX validation after save — slide count mismatch and unreadable slides are reported as `⚠` warnings; (3) sandbox-safe browser launch for native mode — tries Chrome → Edge → Chromium → Playwright bundled Chromium, adds `--no-sandbox` automatically on Linux/Docker/CI; (4) QA process documented in SKILL.md.
+**v1.1.7** — Two native mode image fixes: (1) images wrapped in transparent-background animation divs (e.g. `kd-reveal`, fade-in wrappers) were silently skipped by the decorative-blob filter — fixed by checking for child raster elements before skipping; (2) `object-fit: contain` and `fill` images were falling back to the Playwright screenshot path (which failed silently) — fixed by handling them directly in `_download_img_direct` without cropping. Both issues caused content images to disappear from native PPTX exports when slides used CSS animation wrappers around `<img>` elements. **v1.1.6** — Four improvements borrowed from the Anthropic PPTX skill: post-export preview grid; structural PPTX validation; sandbox-safe browser launch; QA process documented.
 
 ---
 
@@ -142,6 +142,31 @@ Captures the full rendered page as a PNG — useful for sharing reports or singl
 ```bash
 pip install playwright python-pptx beautifulsoup4 lxml
 ```
+
+---
+
+## Use Case: Brand Style Migration
+
+Migrate an existing `.pptx` to a custom brand design system — get both a pixel-perfect archive and an editable version in one workflow.
+
+**Setup:** Create `themes/your-brand/` with a `reference.md` describing colors, fonts, and layouts (and optionally a `starter.html` for complex visual systems).
+
+```bash
+# Step 1 — re-style: slide-creator reads the PPTX and migrates to your brand theme
+/slide-creator --plan "migrate company-deck.pptx to our brand style"
+# review PLANNING.md, then:
+/slide-creator --generate
+# → branded-deck.html
+
+# Step 2 — export both modes
+/kai-html-export branded-deck.html
+# → branded-deck.pptx  (pixel-perfect, for sharing)
+
+/kai-html-export --pptx --mode native branded-deck.html
+# → branded-deck.pptx  (editable text, for editing)
+```
+
+This workflow is especially useful when an internal template or brand guidelines exist as a `starter.html` — slide-creator uses it as the base and fills in content from the source PPTX.
 
 ---
 

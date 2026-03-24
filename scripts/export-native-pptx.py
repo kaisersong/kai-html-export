@@ -511,7 +511,8 @@ _EXTRACT_JS = r"""
             // (e.g. ambient orb/cloud divs in blue-sky style: rgba(x,x,x,0.3) blobs)
             const alphaMatch = (bgColor || '').match(/rgba\([^)]+,\s*([\d.]+)\s*\)/);
             const bgAlpha = alphaMatch ? parseFloat(alphaMatch[1]) : 1.0;
-            if (bgAlpha < 0.5 && !totalText && bounds.width > 1.5 && bounds.height > 1.5) return [];
+            const hasChildRasters = el.querySelectorAll('img, svg, canvas').length > 0;
+            if (bgAlpha < 0.5 && !totalText && !hasChildRasters && bounds.width > 1.5 && bounds.height > 1.5) return [];
 
             // Detect "leaf-text container": a div whose entire visible content is text
             // Case A: no child elements at all — e.g. <div class="chapter-num">01</div>
@@ -1102,9 +1103,8 @@ def _download_img_direct(source: str, b: Dict, object_fit: str, pptx_slide) -> b
     CSS opacity and rendering are captured correctly.
     Returns True on success, False to fall back to screenshot.
     """
-    # Only handle cover — contain/fill/none should use the Playwright screenshot path
-    # so that CSS opacity and compositing are correctly captured.
-    if object_fit != 'cover':
+    # Handle cover, contain, fill, and empty (default) — other values fall back to screenshot.
+    if object_fit not in ('cover', 'contain', 'fill', ''):
         return False
 
     try:
@@ -1136,13 +1136,15 @@ def _download_img_direct(source: str, b: Dict, object_fit: str, pptx_slide) -> b
         aspect_img = w_img / h_img
 
         # Compute crop fractions for object-fit: cover
+        # For contain/fill/'', embed the image without cropping.
         crop_l = crop_r = crop_t = crop_b = 0.0
-        if aspect_box > aspect_img:
-            # Fill width, crop top/bottom symmetrically
-            crop_t = crop_b = 0.5 * (1.0 - aspect_img / aspect_box)
-        else:
-            # Fill height, crop left/right symmetrically
-            crop_l = crop_r = 0.5 * (1.0 - aspect_box / aspect_img)
+        if object_fit == 'cover':
+            if aspect_box > aspect_img:
+                # Fill width, crop top/bottom symmetrically
+                crop_t = crop_b = 0.5 * (1.0 - aspect_img / aspect_box)
+            else:
+                # Fill height, crop left/right symmetrically
+                crop_l = crop_r = 0.5 * (1.0 - aspect_box / aspect_img)
 
         # PIL-crop to the exact visible pixel region instead of using PPTX srcRect.
         # PPTX srcRect is rendered inconsistently across Keynote/LibreOffice/PowerPoint,

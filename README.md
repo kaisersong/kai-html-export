@@ -2,11 +2,11 @@
 
 English | [简体中文](README.zh-CN.md)
 
-> Export any HTML file to PPTX or PNG — works with kai-slide-creator, kai-report-creator, or any self-contained HTML.
+> Export any HTML file to PPTX or PNG, or publish it to a public URL — works with kai-slide-creator, kai-report-creator, or any self-contained HTML.
 
-A Claude Code skill that converts HTML files into portable formats using a headless browser. No Node.js required — uses your existing system Chrome.
+A Claude Code skill that converts HTML files into portable formats using a headless browser. PPTX/PNG export needs no Node.js and uses your existing system Chrome; the optional URL-sharing helper uses Cloudflare Pages by default and keeps Vercel as a fallback.
 
-**v1.1.7** — Two native mode image fixes: (1) images wrapped in transparent-background animation divs (e.g. `kd-reveal`, fade-in wrappers) were silently skipped by the decorative-blob filter — fixed by checking for child raster elements before skipping; (2) `object-fit: contain` and `fill` images were falling back to the Playwright screenshot path (which failed silently) — fixed by handling them directly in `_download_img_direct` without cropping. Both issues caused content images to disappear from native PPTX exports when slides used CSS animation wrappers around `<img>` elements. **v1.1.6** — Four improvements borrowed from the Anthropic PPTX skill: post-export preview grid; structural PPTX validation; sandbox-safe browser launch; QA process documented.
+**v1.2.0** — Added a unified `share-html.py` entrypoint, made Cloudflare Pages the default share target, kept Vercel as a fallback, and disabled automatic sharing in hosted cloud sandboxes with manual-share guidance. **v1.1.7** — Two native mode image fixes: (1) images wrapped in transparent-background animation divs (e.g. `kd-reveal`, fade-in wrappers) were silently skipped by the decorative-blob filter — fixed by checking for child raster elements before skipping; (2) `object-fit: contain` and `fill` images were falling back to the Playwright screenshot path (which failed silently) — fixed by handling them directly in `_download_img_direct` without cropping. Both issues caused content images to disappear from native PPTX exports when slides used CSS animation wrappers around `<img>` elements. **v1.1.6** — Four improvements borrowed from the Anthropic PPTX skill: post-export preview grid; structural PPTX validation; sandbox-safe browser launch; QA process documented.
 
 ---
 
@@ -39,6 +39,8 @@ Dependencies are installed automatically by OpenClaw on first use.
 /kai-html-export --pptx --mode native [file]    # Editable PPTX (native mode)
 /kai-html-export --png [file.html]              # Full-page screenshot to PNG
 /kai-html-export --png --scale 2                # 2× retina-quality PNG
+python scripts/share-html.py [file.html|folder]     # Optional: Share HTML to URL (Cloudflare default)
+python scripts/share-html.py --provider vercel [file.html|folder]
 ```
 
 If no file is specified, the most recently modified `.html` in the current directory is used.
@@ -128,6 +130,37 @@ Captures the full rendered page as a PNG — useful for sharing reports or singl
 
 ---
 
+## Share HTML to URL
+
+Publish a generated deck or report and get back a live URL:
+
+```bash
+python scripts/share-html.py presentation.html
+python scripts/share-html.py ./my-html-folder
+python scripts/share-html.py --provider vercel presentation.html
+```
+
+- Accepts a single HTML file or a folder with `index.html`
+- Copies common relative assets automatically when starting from one file
+- Defaults to Cloudflare Pages because Cloudflare is generally more reachable from China
+- Keeps Vercel as an optional fallback provider
+- Uses runtime CLIs only; the repo does not add new install-time dependencies
+- In hosted cloud sandboxes, automatic sharing is disabled and the helper prints manual-share guidance instead of starting login or deploy flows
+
+For local Cloudflare publishing:
+
+```bash
+wrangler login
+```
+
+For local Vercel publishing:
+
+```bash
+npx vercel login
+```
+
+---
+
 ## Requirements
 
 | Dependency | Purpose | Auto-installed (OpenClaw) |
@@ -135,12 +168,23 @@ Captures the full rendered page as a PNG — useful for sharing reports or singl
 | Python 3 + `playwright` | Headless browser screenshots | ✅ via uv |
 | Python 3 + `python-pptx` | Assemble PPTX | ✅ via uv |
 | `beautifulsoup4` + `lxml` | HTML parsing (native mode) | ✅ via uv |
+| Node.js + Wrangler / Vercel CLI | Optional live URL publishing | ❌ manual |
 
 **Browser:** Uses system Chrome, Edge, or Brave first — no 300MB Chromium download. Falls back to Playwright Chromium if no system browser is found.
 
 **Claude Code users** — install manually:
 ```bash
 pip install playwright python-pptx beautifulsoup4 lxml
+```
+
+For optional URL publishing with Cloudflare:
+```bash
+wrangler login
+```
+
+For optional URL publishing with Vercel:
+```bash
+npx vercel login
 ```
 
 ---

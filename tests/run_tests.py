@@ -21,6 +21,7 @@ TESTS_DIR = Path(__file__).parent
 SUITES = {
     "pptx":       TESTS_DIR / "test_pptx.py",
     "screenshot": TESTS_DIR / "test_screenshot.py",
+    "share":      TESTS_DIR / "test_share_deploy.py",
 }
 
 
@@ -52,6 +53,7 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--pptx",       action="store_true", help="Run PPTX tests only")
     parser.add_argument("--png",        action="store_true", help="Run screenshot tests only")
+    parser.add_argument("--share",      action="store_true", help="Run share-helper tests only")
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
     args = parser.parse_args()
 
@@ -61,6 +63,8 @@ def main():
         files = [SUITES["pptx"]]
     elif args.png:
         files = [SUITES["screenshot"]]
+    elif args.share:
+        files = [SUITES["share"]]
     else:
         files = list(SUITES.values())
 

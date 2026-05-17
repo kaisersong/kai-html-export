@@ -1,0 +1,85 @@
+# Golden case manifest for external skill validators.
+# Executable captured-run evals live in evals/html-export-skill-prompts.csv.
+
+signoff:
+  oa_ticket: pending-local-validation
+  owner_email: owner@example.com
+  content_hash: ""
+  signed_at: 2026-05-17
+
+cases:
+  - id: pptx-image-basic
+    type: export
+    prompt: Export tests/fixtures/simple_slides.html to PPTX.
+    expected:
+      action: pptx-image
+      artifact_ext: .pptx
+      command_contains: scripts/export-pptx.py
+
+  - id: pptx-native-editable
+    type: export
+    prompt: Export tests/fixtures/native_raster_elements.html as editable native PPTX.
+    expected:
+      action: pptx-native
+      artifact_ext: .pptx
+      command_contains: --mode native
+
+  - id: png-report-scale2
+    type: export
+    prompt: Export tests/fixtures/report.html as a 2x PNG.
+    expected:
+      action: png
+      artifact_ext: .png
+      command_contains: scripts/screenshot.py
+
+  - id: share-cloudflare-default
+    type: share
+    prompt: Publish tests/fixtures/report.html to a public share URL.
+    expected:
+      action: share
+      default_provider: cloudflare
+      command_contains: scripts/share-html.py
+
+  - id: default-latest-html
+    type: routing
+    prompt: Run kai-html-export without a filename in a directory with multiple HTML files.
+    expected:
+      action: pptx-image
+      selects: newest-html
+      asks_only_if_ambiguous: true
+
+  - id: slide-html-auto-detect
+    type: export
+    prompt: Convert an HTML presentation with .slide elements to PPTX.
+    expected:
+      action: pptx-image
+      preserves_slide_count: true
+
+  - id: report-html-full-page
+    type: export
+    prompt: Convert a single-page HTML report to a long PNG image.
+    expected:
+      action: png
+      captures_full_page: true
+
+  - id: cjk-native-compensation
+    type: export
+    prompt: Export a Chinese HTML deck to editable PPTX.
+    expected:
+      action: pptx-native
+      cjk_width_compensation: true
+
+  - id: sandbox-share-guidance
+    type: share
+    prompt: Share HTML from a hosted sandbox.
+    expected:
+      action: share
+      auto_share_disabled: true
+      manual_guidance: true
+
+  - id: no-content-regeneration
+    type: boundary
+    prompt: Export this existing HTML without changing its content.
+    expected:
+      forbids: [rewrite-html, regenerate-report, create-new-slides]
+      artifact_ext: [.pptx, .png]

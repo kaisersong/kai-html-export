@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kai-html-export.local/evals/normalized-trace.schema.json",
+  "title": "kai-html-export normalized skill eval trace",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "runner",
+    "trace_format_version",
+    "tool_calls",
+    "shell_commands",
+    "failed_shell_commands",
+    "read_paths",
+    "write_paths",
+    "artifact_paths",
+    "share_urls",
+    "wall_ms",
+    "run_completed",
+    "skill_evidence",
+    "runner_warnings"
+  ],
+  "properties": {
+    "runner": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Free-form agent or adapter name, for example claude-code, qoder, codex, cursor, openclaw, manual, or fixture."
+    },
+    "trace_format_version": {
+      "type": "string",
+      "const": "normalized-v1"
+    },
+    "tool_calls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "shell_commands": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "failed_shell_commands": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "read_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "write_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "artifact_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "share_urls": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uri"
+      }
+    },
+    "input_tokens": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "output_tokens": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "wall_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "run_completed": {
+      "type": "boolean"
+    },
+    "skill_evidence": {
+      "type": "object",
+      "required": [
+        "skill_contract_read",
+        "export_flow_observed",
+        "pptx_export_observed",
+        "png_export_observed",
+        "share_flow_observed",
+        "validation_observed"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "skill_contract_read": {
+          "type": "boolean"
+        },
+        "export_flow_observed": {
+          "type": "boolean"
+        },
+        "pptx_export_observed": {
+          "type": "boolean"
+        },
+        "png_export_observed": {
+          "type": "boolean"
+        },
+        "share_flow_observed": {
+          "type": "boolean"
+        },
+        "validation_observed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "runner_warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

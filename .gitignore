@@ -1,6 +1,9 @@
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
 .pytest_cache/
+.tmp/
+evals/artifacts/current/
 *.pptx
 *.png
+!tests/fixtures/skill-evals/artifacts/*.pptx
+!tests/fixtures/skill-evals/artifacts/*.png

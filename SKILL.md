@@ -8,7 +8,7 @@ description: >-
   "导出为ppt", "导出ppt", "生成ppt", "转成ppt", "导出幻灯片",
   "html转ppt", "保存为ppt", "可编辑的ppt", "native模式", "导出为可编辑",
   "share html", "deploy html", "share slides", "发布 html".
-version: 1.2.0
+version: 1.3.0
 metadata:
   openclaw:
     emoji: "📤"
@@ -137,6 +137,31 @@ After every native-mode export, assume something looks wrong until proven otherw
 2. **Structural check** — if slide count mismatches or any slide is unreadable, the script prints `⚠` warnings
 3. **Open PPTX** — for image issues or layout problems, open the PPTX in Keynote/PowerPoint to verify the render
 4. **Re-export** — if visual quality is wrong, diagnose the root cause in the HTML before re-running
+
+## Eval Workflow
+
+For agent-run regression coverage, use the captured-run skill eval harness:
+
+```bash
+python3 <skill-path>/scripts/run-skill-evals.py --root <skill-path> --runner fixture --format json
+```
+
+The fixture runner is deterministic and does not call Codex, Claude, Qoder, a model API, Cloudflare, Vercel, or the network. It replays normalized traces from `tests/fixtures/skill-evals/` and scores Outcome, Process, Style, and Efficiency.
+
+For a real agent run, keep execution outside the harness and score the captured trace with the generic runner:
+
+```bash
+python3 <skill-path>/scripts/run-skill-evals.py \
+  --root <skill-path> \
+  --runner trace \
+  --case-id <case-id> \
+  --normalized-trace <agent.normalized.json> \
+  --format json
+```
+
+The trace must use `trace_format_version: "normalized-v1"` and match `evals/normalized-trace.schema.json`. The `runner` field is a free-form agent name, so Claude, Qoder, Cursor, OpenClaw, Codex, or a manual runner all use the same scoring path.
+
+For positive real-agent runs, write `style-rubric.json` under the selected case artifact directory using `evals/skill-run-rubric.schema.json`. Fixture rubrics are not reused by `--runner trace`.
 
 ## Works with any HTML
 

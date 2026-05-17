@@ -6,7 +6,7 @@ English | [简体中文](README.zh-CN.md)
 
 A Claude Code skill that converts HTML files into portable formats using a headless browser. PPTX/PNG export needs no Node.js and uses your existing system Chrome; the optional URL-sharing helper uses Cloudflare Pages by default and keeps Vercel as a fallback.
 
-**v1.2.0** — Added a unified `share-html.py` entrypoint, made Cloudflare Pages the default share target, kept Vercel as a fallback, and disabled automatic sharing in hosted cloud sandboxes with manual-share guidance. **v1.1.7** — Two native mode image fixes: (1) images wrapped in transparent-background animation divs (e.g. `kd-reveal`, fade-in wrappers) were silently skipped by the decorative-blob filter — fixed by checking for child raster elements before skipping; (2) `object-fit: contain` and `fill` images were falling back to the Playwright screenshot path (which failed silently) — fixed by handling them directly in `_download_img_direct` without cropping. Both issues caused content images to disappear from native PPTX exports when slides used CSS animation wrappers around `<img>` elements. **v1.1.6** — Four improvements borrowed from the Anthropic PPTX skill: post-export preview grid; structural PPTX validation; sandbox-safe browser launch; QA process documented.
+**v1.3.0** — Added a captured-run eval harness with seven skill-routing/export cases, runner-agnostic `normalized-v1` traces, external validator manifests, fixture baseline scoring, and a pytest `--evals` suite. **v1.2.0** — Added a unified `share-html.py` entrypoint, made Cloudflare Pages the default share target, kept Vercel as a fallback, and disabled automatic sharing in hosted cloud sandboxes with manual-share guidance. **v1.1.7** — Two native mode image fixes: (1) images wrapped in transparent-background animation divs (e.g. `kd-reveal`, fade-in wrappers) were silently skipped by the decorative-blob filter — fixed by checking for child raster elements before skipping; (2) `object-fit: contain` and `fill` images were falling back to the Playwright screenshot path (which failed silently) — fixed by handling them directly in `_download_img_direct` without cropping. Both issues caused content images to disappear from native PPTX exports when slides used CSS animation wrappers around `<img>` elements. **v1.1.6** — Four improvements borrowed from the Anthropic PPTX skill: post-export preview grid; structural PPTX validation; sandbox-safe browser launch; QA process documented.
 
 ---
 
@@ -211,6 +211,47 @@ Migrate an existing `.pptx` to a custom brand design system — get both a pixel
 ```
 
 This workflow is especially useful when an internal template or brand guidelines exist as a `starter.html` — slide-creator uses it as the base and fills in content from the source PPTX.
+
+---
+
+## Eval Workflow
+
+`kai-html-export` includes a captured-run skill eval harness. It is separate from the normal export unit tests: pytest checks the Python scripts, while skill evals check whether an agent routes the request correctly, uses the right export flow, records evidence, and avoids unnecessary work.
+
+Run the deterministic fixture baseline:
+
+```bash
+python scripts/run-skill-evals.py --runner fixture --format json --json-out .tmp/skill-evals/results.json
+```
+
+The harness reads `evals/html-export-skill-prompts.csv`, replays checked-in normalized traces from `tests/fixtures/skill-evals/`, and scores each case across Outcome, Process, Style, and Efficiency.
+
+Agent-specific execution is outside the scorer. Any agent can run a prompt and then hand the harness a `normalized-v1` trace that matches `evals/normalized-trace.schema.json`:
+
+```bash
+python scripts/run-skill-evals.py \
+  --runner trace \
+  --case-id explicit-pptx-image \
+  --normalized-trace path/to/agent.normalized.json \
+  --format json
+```
+
+The `runner` field inside the trace is a free-form agent name such as `claude-code`, `qoder`, `cursor`, `openclaw`, `manual`, or `fixture`; the scorer does not require or assume a Codex runtime.
+
+For positive real-agent runs, write `<artifact-dir>/<case-id>/style-rubric.json` using `evals/skill-run-rubric.schema.json`. Fixture rubrics are only used by `--runner fixture`; `--runner trace` must bring its own rubric evidence.
+
+Current fixture baseline:
+
+| Metric | Value |
+|--------|-------|
+| Cases | 7 |
+| Passed | 7 |
+| Failed | 0 |
+| Incomplete | 0 |
+| Average score | 99.57 |
+| Average category scores | Outcome 25.00, Process 25.00, Style 24.57, Efficiency 25.00 |
+
+External skill validators can also inspect the seven YAML manifests in `evals/` for golden, exception, permission, adversarial, tool-failure, context-bloat, and multi-skill coverage.
 
 ---
 

@@ -1,0 +1,7 @@
+cases:
+  - id: many-unrelated-html-files
+    prompt: Export the newest HTML file from a directory with many unrelated HTML reports and decks.
+    expected:
+      judgement: pass
+      max_files_read: 20
+      selects: newest-html

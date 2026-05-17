@@ -1,0 +1,38 @@
+{
+  "case_id": "explicit-share-cloudflare",
+  "overall_pass": true,
+  "score": 93,
+  "checks": [
+    {
+      "id": "format_fit",
+      "pass": true,
+      "score": 5,
+      "notes": "The run selects the share flow instead of producing PPTX or PNG."
+    },
+    {
+      "id": "shareability",
+      "pass": true,
+      "score": 5,
+      "notes": "Cloudflare is used as the default provider."
+    },
+    {
+      "id": "no_unrequested_generation",
+      "pass": true,
+      "score": 5,
+      "notes": "The trace publishes an existing HTML file and does not regenerate content."
+    },
+    {
+      "id": "evidence_trace",
+      "pass": true,
+      "score": 4,
+      "notes": "The trace includes share command and router validation evidence."
+    },
+    {
+      "id": "visual_fidelity_intent",
+      "pass": true,
+      "score": 4,
+      "notes": "Publishing preserves the original HTML render path."
+    }
+  ],
+  "summary": "High-quality fixture for Cloudflare share routing."
+}

@@ -1,0 +1,38 @@
+{
+  "case_id": "explicit-pptx-native",
+  "overall_pass": true,
+  "score": 95,
+  "checks": [
+    {
+      "id": "format_fit",
+      "pass": true,
+      "score": 5,
+      "notes": "The run produces a PPTX for an HTML slide deck."
+    },
+    {
+      "id": "editability_fit",
+      "pass": true,
+      "score": 5,
+      "notes": "Native mode is selected for editable text and supported shapes."
+    },
+    {
+      "id": "visual_fidelity_intent",
+      "pass": true,
+      "score": 4,
+      "notes": "The trace accepts native mode's simplified visual model."
+    },
+    {
+      "id": "no_unrequested_generation",
+      "pass": true,
+      "score": 5,
+      "notes": "The source HTML is exported rather than regenerated."
+    },
+    {
+      "id": "evidence_trace",
+      "pass": true,
+      "score": 5,
+      "notes": "The trace includes native export and validation evidence."
+    }
+  ],
+  "summary": "High-quality fixture for editable native PPTX export."
+}

@@ -1,0 +1,18 @@
+cases:
+  - id: playwright-timeout
+    prompt: Export HTML when Playwright navigation times out.
+    expected:
+      judgement: fail-with-diagnostic
+      owner: scripts/screenshot.py
+
+  - id: pptx-validation-fails
+    prompt: Native PPTX export creates an unreadable PPTX.
+    expected:
+      judgement: fail-validation
+      owner: scripts/verify-pptx.py
+
+  - id: cloudflare-cli-fails
+    prompt: Share HTML when wrangler exits nonzero.
+    expected:
+      judgement: fail-with-provider-output
+      owner: scripts/deploy-cloudflare.py

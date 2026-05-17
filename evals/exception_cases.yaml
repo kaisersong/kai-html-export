@@ -1,0 +1,30 @@
+cases:
+  - id: missing-input-html
+    prompt: Export missing.html to PPTX.
+    expected:
+      judgement: fail
+      error_contains: file not found
+
+  - id: no-slide-elements-for-pptx
+    prompt: Export an HTML file with no .slide elements to PPTX.
+    expected:
+      judgement: graceful-noop
+      output_contains: Nothing to export
+
+  - id: invalid-provider
+    prompt: Share report.html with provider "ftp".
+    expected:
+      judgement: fail
+      error_contains: invalid choice
+
+  - id: directory-without-index
+    prompt: Share a directory that does not contain index.html.
+    expected:
+      judgement: fail
+      error_contains: index.html
+
+  - id: browser-missing
+    prompt: Export HTML on a machine with no browser available.
+    expected:
+      judgement: fail
+      remediation_contains: playwright install chromium

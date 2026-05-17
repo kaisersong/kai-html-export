@@ -1,0 +1,27 @@
+{
+  "runner": "fixture",
+  "trace_format_version": "normalized-v1",
+  "tool_calls": [],
+  "shell_commands": [
+    "python3 scripts/export-pptx.py tests/fixtures/simple_slides.html evals/artifacts/current/skill-runs/explicit-pptx-image/deck.pptx --mode image",
+    "python3 scripts/verify-pptx.py evals/artifacts/current/skill-runs/explicit-pptx-image/deck.pptx"
+  ],
+  "failed_shell_commands": [],
+  "read_paths": ["SKILL.md", "README.md", "scripts/export-pptx.py", "scripts/verify-pptx.py"],
+  "write_paths": ["evals/artifacts/current/skill-runs/explicit-pptx-image/deck.pptx"],
+  "artifact_paths": ["tests/fixtures/skill-evals/artifacts/deck-image.pptx"],
+  "share_urls": [],
+  "input_tokens": 9000,
+  "output_tokens": 1800,
+  "wall_ms": 25000,
+  "run_completed": true,
+  "skill_evidence": {
+    "skill_contract_read": true,
+    "export_flow_observed": true,
+    "pptx_export_observed": true,
+    "png_export_observed": false,
+    "share_flow_observed": false,
+    "validation_observed": true
+  },
+  "runner_warnings": []
+}

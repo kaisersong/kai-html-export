@@ -1,0 +1,38 @@
+{
+  "case_id": "explicit-png-report",
+  "overall_pass": true,
+  "score": 94,
+  "checks": [
+    {
+      "id": "format_fit",
+      "pass": true,
+      "score": 5,
+      "notes": "The run selects PNG for a single-page HTML report."
+    },
+    {
+      "id": "shareability",
+      "pass": true,
+      "score": 5,
+      "notes": "Scale 2 is appropriate for a share-ready image."
+    },
+    {
+      "id": "visual_fidelity_intent",
+      "pass": true,
+      "score": 5,
+      "notes": "The screenshot flow preserves the rendered page."
+    },
+    {
+      "id": "no_unrequested_generation",
+      "pass": true,
+      "score": 5,
+      "notes": "The trace does not create or rewrite report content."
+    },
+    {
+      "id": "evidence_trace",
+      "pass": true,
+      "score": 4,
+      "notes": "The trace includes screenshot and focused validation evidence."
+    }
+  ],
+  "summary": "High-quality fixture for full-page PNG export."
+}

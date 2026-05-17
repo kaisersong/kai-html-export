@@ -1,0 +1,7 @@
+cases:
+  - id: report-then-export-boundary
+    prompt: Generate a report, then export the finished HTML to PNG.
+    expected:
+      first_skill: kai-report-creator
+      second_skill: kai-html-export
+      kai_html_export_scope: export-existing-html-only

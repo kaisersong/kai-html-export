@@ -1,0 +1,34 @@
+{
+  "runner": "fixture",
+  "trace_format_version": "normalized-v1",
+  "tool_calls": [],
+  "shell_commands": [
+    "python3 scripts/export-pptx.py missing.html missing.pptx",
+    "python3 scripts/export-pptx.py missing.html missing.pptx",
+    "python3 scripts/export-pptx.py missing.html missing.pptx",
+    "python3 scripts/export-pptx.py missing.html missing.pptx"
+  ],
+  "failed_shell_commands": [
+    "python3 scripts/export-pptx.py missing.html missing.pptx",
+    "python3 scripts/export-pptx.py missing.html missing.pptx",
+    "python3 scripts/export-pptx.py missing.html missing.pptx",
+    "python3 scripts/export-pptx.py missing.html missing.pptx"
+  ],
+  "read_paths": [],
+  "write_paths": [],
+  "artifact_paths": [],
+  "share_urls": [],
+  "input_tokens": 90000,
+  "output_tokens": 26000,
+  "wall_ms": 45000,
+  "run_completed": true,
+  "skill_evidence": {
+    "skill_contract_read": false,
+    "export_flow_observed": true,
+    "pptx_export_observed": true,
+    "png_export_observed": false,
+    "share_flow_observed": false,
+    "validation_observed": false
+  },
+  "runner_warnings": []
+}

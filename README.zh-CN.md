@@ -6,7 +6,7 @@
 
 一个 Claude Code 技能，通过无头浏览器将 HTML 文件转换为便携格式。PPTX / PNG 导出无需 Node.js，直接使用你已安装的系统 Chrome；可选的 URL 发布 helper 默认使用 Cloudflare Pages，并保留 Vercel 作为回退方案。
 
-**v1.2.0** — 新增统一分享入口 `share-html.py`，默认发布到 Cloudflare Pages，保留 Vercel 回退，并在托管云沙箱里禁用自动分享，改为输出手动分享指引。**v1.1.7** — 修复两处 native 模式图片丢失问题：（1）被 CSS 动画 wrapper（如 `kd-reveal`、淡入容器）包裹的图片会被装饰性 blob 过滤器误判为装饰元素而整棵跳过——修复方式：跳过前先检查是否含子级光栅元素；（2）`object-fit: contain` 和 `fill` 图片会回退到 Playwright 截图路径（静默失败）——修复方式：在 `_download_img_direct` 中直接读取原图文件嵌入，不做裁剪。这两个问题均会导致使用 CSS 动画 wrapper 包裹 `<img>` 的幻灯片在 native 导出时内容图片全部消失。**v1.1.6** — 导出后预览网格；PPTX 结构验证；浏览器启动沙箱适配；QA 流程说明。
+**v1.3.0** — 新增 captured-run eval harness：7 个 skill 路由/导出 case、通用 agent `normalized-v1` trace、外部 validator manifest、fixture 基线评分，以及 pytest `--evals` 测试入口。**v1.2.0** — 新增统一分享入口 `share-html.py`，默认发布到 Cloudflare Pages，保留 Vercel 回退，并在托管云沙箱里禁用自动分享，改为输出手动分享指引。**v1.1.7** — 修复两处 native 模式图片丢失问题：（1）被 CSS 动画 wrapper（如 `kd-reveal`、淡入容器）包裹的图片会被装饰性 blob 过滤器误判为装饰元素而整棵跳过——修复方式：跳过前先检查是否含子级光栅元素；（2）`object-fit: contain` 和 `fill` 图片会回退到 Playwright 截图路径（静默失败）——修复方式：在 `_download_img_direct` 中直接读取原图文件嵌入，不做裁剪。这两个问题均会导致使用 CSS 动画 wrapper 包裹 `<img>` 的幻灯片在 native 导出时内容图片全部消失。**v1.1.6** — 导出后预览网格；PPTX 结构验证；浏览器启动沙箱适配；QA 流程说明。
 
 ---
 
@@ -211,6 +211,47 @@ npx vercel login
 ```
 
 这套工作流特别适合企业已有品牌模板或 VI 规范的场景——将规范写成 `starter.html`，slide-creator 以此为底板，自动填入源 PPTX 的内容。
+
+---
+
+## Eval 工作流
+
+`kai-html-export` 现在内置 captured-run skill eval harness。它和普通导出单元测试分层：pytest 检查 Python 脚本本身，skill eval 检查 agent 是否正确路由、使用正确导出流程、记录验证证据，并避免不必要的反复尝试。
+
+运行确定性的 fixture 基线：
+
+```bash
+python scripts/run-skill-evals.py --runner fixture --format json --json-out .tmp/skill-evals/results.json
+```
+
+该命令读取 `evals/html-export-skill-prompts.csv`，回放 `tests/fixtures/skill-evals/` 里的 normalized trace，并按 Outcome、Process、Style、Efficiency 四类目标评分。
+
+具体 agent 的执行不放进 scorer 里。任意 agent 跑完 prompt 后，只要交给 harness 一份符合 `evals/normalized-trace.schema.json` 的 `normalized-v1` trace，就能用同一套规则评分：
+
+```bash
+python scripts/run-skill-evals.py \
+  --runner trace \
+  --case-id explicit-pptx-image \
+  --normalized-trace path/to/agent.normalized.json \
+  --format json
+```
+
+trace 里的 `runner` 字段是自由文本，可以是 `claude-code`、`qoder`、`cursor`、`openclaw`、`manual` 或 `fixture`；scorer 不要求也不假设 Codex 运行时。
+
+真实 agent 的正向 run 要把定性评审写到 `<artifact-dir>/<case-id>/style-rubric.json`，格式遵循 `evals/skill-run-rubric.schema.json`。fixture rubric 只给 `--runner fixture` 使用；`--runner trace` 必须带自己的 rubric 证据。
+
+当前 fixture 基线：
+
+| 指标 | 数值 |
+|------|------|
+| Case 数 | 7 |
+| 通过 | 7 |
+| 失败 | 0 |
+| 未完成 | 0 |
+| 平均分 | 99.57 |
+| 分类平均分 | Outcome 25.00，Process 25.00，Style 24.57，Efficiency 25.00 |
+
+外部 skill validator 也可以读取 `evals/` 中的 7 个 YAML manifest，覆盖 golden、exception、permission、adversarial、tool-failure、context-bloat 和 multi-skill 场景。
 
 ---
 

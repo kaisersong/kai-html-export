@@ -6,6 +6,7 @@ Usage:
     python tests/run_tests.py              # run all tests
     python tests/run_tests.py --pptx       # PPTX tests only
     python tests/run_tests.py --png        # screenshot tests only
+    python tests/run_tests.py --evals      # captured-run skill eval tests only
     python tests/run_tests.py -v           # verbose (show each test name)
 
 Requires: pip install pytest Pillow python-pptx
@@ -22,6 +23,7 @@ SUITES = {
     "pptx":       TESTS_DIR / "test_pptx.py",
     "screenshot": TESTS_DIR / "test_screenshot.py",
     "share":      TESTS_DIR / "test_share_deploy.py",
+    "evals":      TESTS_DIR / "test_skill_eval_runner.py",
 }
 
 
@@ -54,6 +56,7 @@ def main():
     parser.add_argument("--pptx",       action="store_true", help="Run PPTX tests only")
     parser.add_argument("--png",        action="store_true", help="Run screenshot tests only")
     parser.add_argument("--share",      action="store_true", help="Run share-helper tests only")
+    parser.add_argument("--evals",      action="store_true", help="Run captured-run skill eval tests only")
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
     args = parser.parse_args()
 
@@ -65,6 +68,8 @@ def main():
         files = [SUITES["screenshot"]]
     elif args.share:
         files = [SUITES["share"]]
+    elif args.evals:
+        files = [SUITES["evals"]]
     else:
         files = list(SUITES.values())
 

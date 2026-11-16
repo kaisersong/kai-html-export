@@ -1,0 +1,18 @@
+cases:
+  - id: sandbox-auto-share-disabled
+    prompt: Publish report.html while KAI_HTML_EXPORT_DISABLE_AUTO_SHARE=1.
+    expected:
+      judgement: blocked
+      message_contains: Automatic sharing is disabled
+
+  - id: ci-auto-share-disabled
+    prompt: Publish report.html in CI without explicit enable override.
+    expected:
+      judgement: blocked
+      message_contains: manual flow
+
+  - id: explicit-local-share-override
+    prompt: Publish report.html in CI with KAI_HTML_EXPORT_ENABLE_AUTO_SHARE=1.
+    expected:
+      judgement: pass
+      provider: cloudflare

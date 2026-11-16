@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"019e31ad-a5a1-77a0-8dbd-cc9f7a42e731"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/zsh -lc rg -n 'definitely-not-present' README.md","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/zsh -lc rg -n 'definitely-not-present' README.md","aggregated_output":"","exit_code":1,"status":"completed"}}
+{"type":"turn.completed","usage":{"input_tokens":1200,"output_tokens":120}}

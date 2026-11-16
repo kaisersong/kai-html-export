@@ -1,0 +1,24 @@
+{
+  "runner": "fixture",
+  "trace_format_version": "normalized-v1",
+  "tool_calls": [],
+  "shell_commands": [],
+  "failed_shell_commands": [],
+  "read_paths": ["SKILL.md"],
+  "write_paths": [],
+  "artifact_paths": [],
+  "share_urls": [],
+  "input_tokens": 4200,
+  "output_tokens": 700,
+  "wall_ms": 9000,
+  "run_completed": true,
+  "skill_evidence": {
+    "skill_contract_read": true,
+    "export_flow_observed": false,
+    "pptx_export_observed": false,
+    "png_export_observed": false,
+    "share_flow_observed": false,
+    "validation_observed": false
+  },
+  "runner_warnings": ["routing_check_only"]
+}

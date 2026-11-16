@@ -16,7 +16,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import unquote
 
 
@@ -48,7 +48,7 @@ def collect_local_references(html_text: str) -> set[str]:
 
 
 def _safe_source_for_reference(base_dir: Path, reference: str) -> Path | None:
-    normalized = unquote(reference).replace("/", "\\")
+    normalized = Path(*PurePosixPath(unquote(reference).replace("\\", "/")).parts)
     source = (base_dir / normalized).resolve()
     try:
         source.relative_to(base_dir.resolve())
@@ -63,7 +63,7 @@ def _copy_reference(base_dir: Path, staging_dir: Path, reference: str) -> None:
     source = _safe_source_for_reference(base_dir, reference)
     if source is None or source.is_dir():
         return
-    target = staging_dir / Path(reference)
+    target = staging_dir / Path(*PurePosixPath(unquote(reference).replace("\\", "/")).parts)
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, target)
 

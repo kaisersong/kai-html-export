@@ -1,0 +1,8 @@
+id,kind,should_trigger,prompt_path,expected_action,expected_artifact,max_shell_commands,max_input_tokens,max_output_tokens,max_wall_ms
+explicit-pptx-image,explicit,true,evals/skill-prompts/explicit-pptx-image.md,pptx-image,pptx,8,60000,12000,120000
+explicit-pptx-native,explicit,true,evals/skill-prompts/explicit-pptx-native.md,pptx-native,pptx,8,60000,12000,120000
+explicit-png-report,explicit,true,evals/skill-prompts/explicit-png-report.md,png,png,8,60000,12000,120000
+explicit-share-cloudflare,explicit,true,evals/skill-prompts/explicit-share-cloudflare.md,share,url,8,60000,12000,120000
+boundary-default-latest-html,boundary,true,evals/skill-prompts/boundary-default-latest-html.md,pptx-image,pptx,8,60000,12000,120000
+negative-slide-generation,negative,false,evals/skill-prompts/negative-slide-generation.md,,none,5,30000,8000,90000
+negative-report-generation,negative,false,evals/skill-prompts/negative-report-generation.md,,none,5,30000,8000,90000

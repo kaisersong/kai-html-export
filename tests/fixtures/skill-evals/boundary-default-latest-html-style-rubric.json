@@ -1,0 +1,38 @@
+{
+  "case_id": "boundary-default-latest-html",
+  "overall_pass": true,
+  "score": 92,
+  "checks": [
+    {
+      "id": "format_fit",
+      "pass": true,
+      "score": 5,
+      "notes": "The default route still exports PPTX image mode."
+    },
+    {
+      "id": "visual_fidelity_intent",
+      "pass": true,
+      "score": 5,
+      "notes": "Image mode matches the default sharing use case."
+    },
+    {
+      "id": "no_unrequested_generation",
+      "pass": true,
+      "score": 5,
+      "notes": "The trace chooses an HTML input and does not create new content."
+    },
+    {
+      "id": "evidence_trace",
+      "pass": true,
+      "score": 4,
+      "notes": "The trace includes export and validation evidence."
+    },
+    {
+      "id": "editability_fit",
+      "pass": true,
+      "score": 4,
+      "notes": "Editability is not requested for the default route."
+    }
+  ],
+  "summary": "High-quality fixture for the no-filename default routing behavior."
+}

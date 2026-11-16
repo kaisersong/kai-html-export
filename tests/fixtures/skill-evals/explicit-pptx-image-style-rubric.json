@@ -1,0 +1,38 @@
+{
+  "case_id": "explicit-pptx-image",
+  "overall_pass": true,
+  "score": 96,
+  "checks": [
+    {
+      "id": "format_fit",
+      "pass": true,
+      "score": 5,
+      "notes": "The run uses image-mode PPTX for a final slide deck export."
+    },
+    {
+      "id": "visual_fidelity_intent",
+      "pass": true,
+      "score": 5,
+      "notes": "Image mode is the right choice for pixel-perfect sharing."
+    },
+    {
+      "id": "editability_fit",
+      "pass": true,
+      "score": 4,
+      "notes": "Editability is not required for this case, and the trace does not promise it."
+    },
+    {
+      "id": "no_unrequested_generation",
+      "pass": true,
+      "score": 5,
+      "notes": "The trace exports an existing HTML file and does not rewrite slide content."
+    },
+    {
+      "id": "evidence_trace",
+      "pass": true,
+      "score": 5,
+      "notes": "The trace includes the export command and a PPTX validation command."
+    }
+  ],
+  "summary": "High-quality fixture for pixel-perfect PPTX export."
+}

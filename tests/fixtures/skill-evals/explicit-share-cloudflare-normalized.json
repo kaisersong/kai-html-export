@@ -1,0 +1,27 @@
+{
+  "runner": "fixture",
+  "trace_format_version": "normalized-v1",
+  "tool_calls": [],
+  "shell_commands": [
+    "python3 scripts/share-html.py tests/fixtures/report.html --provider cloudflare",
+    "python3 -m pytest tests/test_share_deploy.py::test_share_router_defaults_to_cloudflare_provider -q"
+  ],
+  "failed_shell_commands": [],
+  "read_paths": ["SKILL.md", "README.md", "scripts/share-html.py", "scripts/deploy-cloudflare.py", "tests/test_share_deploy.py"],
+  "write_paths": [],
+  "artifact_paths": ["tests/fixtures/skill-evals/artifacts/share-url.txt"],
+  "share_urls": ["https://kai-html-export-eval.pages.dev"],
+  "input_tokens": 9500,
+  "output_tokens": 1700,
+  "wall_ms": 18000,
+  "run_completed": true,
+  "skill_evidence": {
+    "skill_contract_read": true,
+    "export_flow_observed": true,
+    "pptx_export_observed": false,
+    "png_export_observed": false,
+    "share_flow_observed": true,
+    "validation_observed": true
+  },
+  "runner_warnings": []
+}

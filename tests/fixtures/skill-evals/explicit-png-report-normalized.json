@@ -1,0 +1,27 @@
+{
+  "runner": "fixture",
+  "trace_format_version": "normalized-v1",
+  "tool_calls": [],
+  "shell_commands": [
+    "python3 scripts/screenshot.py tests/fixtures/report.html evals/artifacts/current/skill-runs/explicit-png-report/report.png --scale 2",
+    "python3 -m pytest tests/test_screenshot.py::TestScreenshot::test_creates_png_file -q"
+  ],
+  "failed_shell_commands": [],
+  "read_paths": ["SKILL.md", "README.md", "scripts/screenshot.py", "tests/test_screenshot.py"],
+  "write_paths": ["evals/artifacts/current/skill-runs/explicit-png-report/report.png"],
+  "artifact_paths": ["tests/fixtures/skill-evals/artifacts/report.png"],
+  "share_urls": [],
+  "input_tokens": 8500,
+  "output_tokens": 1600,
+  "wall_ms": 22000,
+  "run_completed": true,
+  "skill_evidence": {
+    "skill_contract_read": true,
+    "export_flow_observed": true,
+    "pptx_export_observed": false,
+    "png_export_observed": true,
+    "share_flow_observed": false,
+    "validation_observed": true
+  },
+  "runner_warnings": []
+}

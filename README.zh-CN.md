@@ -236,7 +236,7 @@ python scripts/run-skill-evals.py \
   --format json
 ```
 
-trace 里的 `runner` 字段是自由文本，可以是 `claude-code`、`qoder`、`cursor`、`openclaw`、`manual` 或 `fixture`；scorer 不要求也不假设 Codex 运行时。
+trace 里的 `runner` 字段是自由文本，可以是 `agent-a`、`agent-b`、`manual` 或 `fixture`；scorer 不要求也不假设 Codex 运行时。
 
 真实 agent 的正向 run 要把定性评审写到 `<artifact-dir>/<case-id>/style-rubric.json`，格式遵循 `evals/skill-run-rubric.schema.json`。fixture rubric 只给 `--runner fixture` 使用；`--runner trace` 必须带自己的 rubric 证据。
 

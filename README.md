@@ -236,7 +236,7 @@ python scripts/run-skill-evals.py \
   --format json
 ```
 
-The `runner` field inside the trace is a free-form agent name such as `claude-code`, `qoder`, `cursor`, `openclaw`, `manual`, or `fixture`; the scorer does not require or assume a Codex runtime.
+The `runner` field inside the trace is a free-form agent name such as `agent-a`, `agent-b`, `manual`, or `fixture`; the scorer does not require or assume a Codex runtime.
 
 For positive real-agent runs, write `<artifact-dir>/<case-id>/style-rubric.json` using `evals/skill-run-rubric.schema.json`. Fixture rubrics are only used by `--runner fixture`; `--runner trace` must bring its own rubric evidence.
 

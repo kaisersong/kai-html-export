@@ -159,7 +159,7 @@ python3 <skill-path>/scripts/run-skill-evals.py \
   --format json
 ```
 
-The trace must use `trace_format_version: "normalized-v1"` and match `evals/normalized-trace.schema.json`. The `runner` field is a free-form agent name, so Claude, Qoder, Cursor, OpenClaw, Codex, or a manual runner all use the same scoring path.
+The trace must use `trace_format_version: "normalized-v1"` and match `evals/normalized-trace.schema.json`. The `runner` field is a free-form agent name, so agent adapters and manual runners all use the same scoring path.
 
 For positive real-agent runs, write `style-rubric.json` under the selected case artifact directory using `evals/skill-run-rubric.schema.json`. Fixture rubrics are not reused by `--runner trace`.
 

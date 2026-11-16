@@ -23,7 +23,7 @@
     "runner": {
       "type": "string",
       "minLength": 1,
-      "description": "Free-form agent or adapter name, for example claude-code, qoder, codex, cursor, openclaw, manual, or fixture."
+      "description": "Free-form agent or adapter name, for example agent-a, agent-b, manual, or fixture."
     },
     "trace_format_version": {
       "type": "string",
